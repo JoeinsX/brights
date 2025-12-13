@@ -1,0 +1,3 @@
+line_length: 80
+definitions: [./cmake/]
+extensions: ['./cmake/gersemi/sort_args.py']

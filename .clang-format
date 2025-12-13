@@ -1,0 +1,103 @@
+# Basic formatting style
+BasedOnStyle: LLVM
+Language: Cpp
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Braces (K&R style)
+BreakBeforeBraces: Attach
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterObjCDeclaration: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+
+# Line length
+ColumnLimit: 80
+
+# Pointer alignment
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# Namespace formatting (modern)
+NamespaceIndentation: All
+CompactNamespaces: true
+
+# Access modifiers
+AccessModifierOffset: -4
+
+# Constructor initializer lists
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+AllowAllConstructorInitializersOnNextLine: false
+ConstructorInitializerIndentWidth: 4
+BreakConstructorInitializers: BeforeComma
+
+# Spacing
+SpaceBeforeParens: Never
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+
+# Include ordering
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '^".*'
+    Priority: 3
+IncludeIsMainRegex: '(Test)?$'
+
+# Empty lines
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+# Switch statements
+IndentCaseLabels: false
+IndentCaseBlocks: false
+
+# Ternary operators
+BreakBeforeTernaryOperators: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+
+# Function declarations/definitions
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackParameters: true
+BinPackArguments: true
+PenaltyReturnTypeOnItsOwnLine: 200
+
+# Template formatting
+AlwaysBreakTemplateDeclarations: MultiLine
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Continuation lines
+ContinuationIndentWidth: 4
+
+# Comments
+ReflowComments: true
+SortUsingDeclarations: true
