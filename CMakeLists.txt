@@ -11,10 +11,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 
 add_executable(brights src/main.cpp
-        src/wgpuHelpers.hpp
-        src/window.hpp
-        src/graphics.hpp
-        src/wgslPreprocessor.hpp
+        src/render/wgslPreprocessor.hpp
+        src/render/textureImage.hpp
+        src/render/camera.hpp
+        src/world/worldGenerator.hpp
+        src/world/chunk.hpp
+        src/world/tile.hpp
+        src/render/native/graphicsContext.hpp
+        src/native/window.hpp
+        src/util/logger.hpp
 )
 
 set_target_properties(brights PROPERTIES
@@ -72,9 +77,13 @@ target_link_libraries(brights PRIVATE webgpu glfw glfw3webgpu FastNoise2 MyStbIm
 
 target_copy_webgpu_binaries(brights)
 
-add_custom_command(TARGET brights POST_BUILD
+add_custom_target(CopyAssets
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
         "${CMAKE_BINARY_DIR}/assets"
         COMMENT "Copying assets folder to binary directory..."
 )
+
+# Make your executable depend on the CopyAssets target
+# This ensures assets are checked/copied whenever you build 'brights'
+add_dependencies(brights CopyAssets)

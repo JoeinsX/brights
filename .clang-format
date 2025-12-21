@@ -22,7 +22,7 @@ BraceWrapping:
   BeforeElse: false
 
 # Line length
-ColumnLimit: 80
+ColumnLimit: 120
 
 # Pointer alignment
 PointerAlignment: Left
