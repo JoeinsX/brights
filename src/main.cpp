@@ -84,7 +84,7 @@ private:
         registry.Register(TileID::Grass, 0, 0, 4, 1.0);
         registry.Register(TileID::Water, 1, 0, 4, 0.6);
         registry.Register(TileID::ColdGrass, 2, 0, 4, 1.0);
-        registry.Register(TileID::Stone, 7, 0, 1, 2.0, 0.07);
+        registry.Register(TileID::Stone, 3, 0, 4, 2.0, 0.5);
         registry.Register(TileID::HardStone, 4, 0, 4, 2.0);
         registry.Register(TileID::Gravel, 5, 0, 1, 1.0, 0.5);
         registry.Register(TileID::HardGravel, 6, 0, 1, 1.0);
@@ -111,9 +111,16 @@ private:
         static constexpr float basePerspectiveStrength = 0.002f;
         static constexpr float perspectiveStrength = 0.002f;
 
+        float camX = camera.GetOffsetX();
+        float camY = camera.GetOffsetY();
+        auto macroX = static_cast<int32_t>(std::floor(camX));
+        auto macroY = static_cast<int32_t>(std::floor(camY));
+
         UniformData uData{
-            .offsetX = camera.GetOffsetX(),
-            .offsetY = camera.GetOffsetY(),
+            .macroOffsetX = macroX,
+            .macroOffsetY = macroY,
+            .offsetX = camX - static_cast<float>(macroX),
+            .offsetY = camY - static_cast<float>(macroY),
             .resX = static_cast<float>(windowWidth),
             .resY = static_cast<float>(windowHeight),
             .scale = camera.GetScale(),

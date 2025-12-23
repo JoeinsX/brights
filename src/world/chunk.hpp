@@ -143,7 +143,7 @@ public:
                     }
                 }
 
-                if(lowerEdgeCount == 1 && lowerCornerCount == 0) {
+                if(lowerEdgeCount <= 1 && lowerCornerCount == 0) {
                     softnessMap[index * 2 + 1] = 0.0f;
                 } else {
                     softnessMap[index * 2 + 1] = 1.0f;

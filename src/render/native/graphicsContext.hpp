@@ -13,6 +13,7 @@ namespace ShaderSlots {
 }
 
 struct UniformData {
+    int32_t macroOffsetX, macroOffsetY;
     float offsetX, offsetY;
     float resX, resY;
     float scale;
@@ -185,7 +186,7 @@ public:
         uniformBuffer = device.createBuffer(uniformBufDesc);
 
         WGSLPreprocessor preprocessor;
-        std::string code = preprocessor.load("assets/shaders/terrain.wgsl");
+        std::string code = preprocessor.load("assets/shaders/terrain/terrain.wgsl");
         wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
         shaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
         shaderCodeDesc.code = code.c_str();

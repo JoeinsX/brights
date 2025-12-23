@@ -58,7 +58,7 @@ public
                 }
                 // Beach / Lowlands
                 else if(h < -0.1f) {
-                    terrain = TileID::Gravel;
+                    terrain = TileID::Sand;
                 }
                 // Land
                 else if(h < 0.6f) {

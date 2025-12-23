@@ -4,6 +4,7 @@ struct VertexOutput {
 };
 
 struct Uniforms {
+    macroOffset: vec2i,
     offset: vec2f,
     resolution: vec2f,
     scale: f32,
@@ -53,90 +54,73 @@ fn unpackTileData(word: u32, isIdxOdd: bool) -> TileData
 
 fn fetchTileData(pos: vec2f) -> TileData {
     let mapSize = u_config.mapSize;
-    if (pos.x < 0.0 || pos.x >= mapSize || pos.y < 0.0 || pos.y >= mapSize) {
-        return TileData(-1.0, -1.0, false);
-    }
-    let idx = u32(pos.y) * u32(mapSize) + u32(pos.x);
+    let idx = u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSize) + u32(i32(pos.x) + u_config.macroOffset.x);
 
     // Each u32 contains 2 tiles (16 bits each)
     let word = s_packed[idx / 2u];
     return unpackTileData(word, (idx % 2u) == 1u);
 }
 
-fn neighborIndexToCoord(index: u32) -> vec2i {
-var NEIGHBOR_OFFSETS = array<vec2i, 9>(
-    vec2i(0, 0),   // 0: Center
-    vec2i(1, 1),   // 1: TR
-    vec2i(1, 0),   // 2: R
-    vec2i(1, -1),  // 3: BR
-    vec2i(0, -1),  // 4: U
-    vec2i(-1, -1), // 5: BL
-    vec2i(-1, 0),  // 6: L
-    vec2i(-1, 1),  // 7: TL
-    vec2i(0, 1)    // 8: D
-);
-    return NEIGHBOR_OFFSETS[index];
+fn fetchTwoTiles(pos: vec2f, isFirstTileOdd: bool) -> array<TileData, 2> {
+    let mapSize = u_config.mapSize;
+    let idx = u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSize) + u32(i32(pos.x) + u_config.macroOffset.x);
+
+    // Each u32 contains 2 tiles (16 bits each)
+    let word = s_packed[idx / 2u];
+    return array<TileData, 2>(unpackTileData(word, isFirstTileOdd), unpackTileData(word, !isFirstTileOdd));
 }
 
-fn neighborCoordToIndex(coord: vec2i) -> u32 {
-    if (coord.x == 0 && coord.y == 0) { return 0u; }
-    if (coord.x == 1) {
-        if (coord.y == 1) { return 1u; }
-        if (coord.y == 0) { return 2u; }
-        return 3u; // y == -1
-    }
-    if (coord.x == 0) {
-        return select(4u, 8u, coord.y == 1);
-    }
-    // x == -1
-    if (coord.y == -1) { return 5u; }
-    if (coord.y == 0)  { return 6u; }
-    return 7u; // y == 1
-}
-
-fn unpackTwoTiles(word: u32) -> array<TileData, 2> {
-    let valL = word & 0xFFFFu;
-    let valR = word >> 16u;
-
-    let hL = f32((valL >> 8u) & 0xFFu) / 127.5;
-    let sL = f32((valL >> 1u) & 0x7Fu) / 127.0;
-    let tL = bool(valL & 1u);
-
-    let hR = f32((valR >> 8u) & 0xFFu) / 127.5;
-    let sR = f32((valR >> 1u) & 0x7Fu) / 127.0;
-    let tR = bool(valR & 1u);
-
-    return array<TileData, 2>(TileData(hL, sL, tL), TileData(hR, sR, tR));
-}
 
 fn fetchTileNeighborhood(pos: vec2f) -> TileNeighborhood {
-    let tilePos = vec2i(floor(pos));
-    let mapSize = i32(u_config.mapSize);
     var nb: TileNeighborhood;
+    let tilePos = floor(pos);
 
-    for (var i: i32 = -1; i <= 1; i++) {
-        let y = tilePos.y + i;
-        if (y < 0 || y >= mapSize) {
-            let empty = TileData(-1.0, -1.0, false);
-            nb.tiles[neighborCoordToIndex(vec2i(-1, i))] = empty;
-            nb.tiles[neighborCoordToIndex(vec2i(0, i))] = empty;
-            nb.tiles[neighborCoordToIndex(vec2i(1, i))] = empty;
-            continue;
-        }
+    // FIX: Calculate absolute world position to determine packing parity
+    let absTilePos = vec2i(tilePos) + u_config.macroOffset;
+    let mapSize = u32(u_config.mapSize);
+    let centerIdx = u32(absTilePos.y) * mapSize + u32(absTilePos.x);
+    let isCenterOdd = (centerIdx % 2u) != 0u;
 
-        let rowBaseIdx = u32(y) * u32(mapSize);
+    if (isCenterOdd) {
+        // If Center is Odd, it shares a word with the tile to its LEFT (Even)
+        // Row Y (Center & Left)
+        let rowY = fetchTwoTiles(tilePos, true);
+        nb.tiles[0] = rowY[0]; // Center (0, 0)
+        nb.tiles[6] = rowY[1]; // L (-1, 0)
+        nb.tiles[2] = fetchTileData(tilePos + vec2f(1.0, 0.0)); // R (1, 0)
 
-        for (var j: i32 = -1; j <= 1; j++) {
-            let x = tilePos.x + j;
-            if (x < 0 || x >= mapSize) {
-                nb.tiles[neighborCoordToIndex(vec2i(j, i))] = TileData(-1.0, -1.0, false);
-            } else {
-                let idx = rowBaseIdx + u32(x);
-                let word = s_packed[idx / 2u];
-                nb.tiles[neighborCoordToIndex(vec2i(j, i))] = unpackTileData(word, (idx % 2u) == 1u);
-            }
-        }
+        // Row Y-1 (Up & Top-Left)
+        let rowUp = fetchTwoTiles(tilePos + vec2f(0.0, -1.0), true);
+        nb.tiles[4] = rowUp[0]; // U (0, -1)
+        nb.tiles[5] = rowUp[1]; // TL (-1, -1)
+        nb.tiles[3] = fetchTileData(tilePos + vec2f(1.0, -1.0)); // TR (1, -1)
+
+        // Row Y+1 (Down & Bottom-Left)
+        let rowDown = fetchTwoTiles(tilePos + vec2f(0.0, 1.0), true);
+        nb.tiles[8] = rowDown[0]; // D (0, 1)
+        nb.tiles[7] = rowDown[1]; // BL (-1, 1)
+        nb.tiles[1] = fetchTileData(tilePos + vec2f(1.0, 1.0)); // BR (1, 1)
+    } else {
+        // If Center is Even, it shares a word with the tile to its RIGHT (Odd)
+        // Row Y (Center & Right)
+        let rowY = fetchTwoTiles(tilePos, false);
+        nb.tiles[0] = rowY[0]; // Center (0, 0)
+        nb.tiles[2] = rowY[1]; // R (1, 0)
+        nb.tiles[6] = fetchTileData(tilePos + vec2f(-1.0, 0.0)); // L (-1, 0)
+
+        // Row Y-1 (Up & Top-Right)
+        let rowUp = fetchTwoTiles(tilePos + vec2f(0.0, -1.0), false);
+        nb.tiles[4] = rowUp[0]; // U (0, -1)
+        nb.tiles[3] = rowUp[1]; // TR (1, -1)
+        nb.tiles[5] = fetchTileData(tilePos + vec2f(-1.0, -1.0)); // TL (-1, -1)
+
+        // Row Y+1 (Down & Bottom-Right)
+        let rowDown = fetchTwoTiles(tilePos + vec2f(0.0, 1.0), false);
+        nb.tiles[8] = rowDown[0]; // D (0, 1)
+        nb.tiles[1] = rowDown[1]; // BR (1, 1)
+        nb.tiles[7] = fetchTileData(tilePos + vec2f(-1.0, 1.0)); // BL (-1, 1)
     }
+
     return nb;
 }
 
@@ -209,23 +193,20 @@ fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
 
 
 fn getTileData(pos: vec2f) -> vec2f {
-    let mapSize = vec2f(u_config.mapSize, u_config.mapSize);
+    let mapSize = u32(u_config.mapSize);
 
-    let p = pos + 0.001;
-    if (p.x < 0.0 || p.x >= mapSize.x || p.y < 0.0 || p.y >= mapSize.y) {
+    let absPos = vec2i(floor(pos + 0.005)) + u_config.macroOffset;
+
+    if (absPos.x < 0 || absPos.x >= i32(mapSize) || absPos.y < 0 || absPos.y >= i32(mapSize)) {
         return vec2f(-1.0);
     }
-    let idx = u32(p.y) * u32(mapSize.x) + u32(p.x);
 
+    let idx = u32(absPos.y) * mapSize + u32(absPos.x);
     let word = s_tilemap[idx / 4u];
-
     let shift = (idx % 4u) * 8u;
     let byte = (word >> shift) & 0xFFu;
 
-    let tx = f32(byte >> 4u);      // High 4 bits
-    let ty = f32(byte & 0x0Fu);    // Low 4 bits
-
-    return vec2f(tx, ty);
+    return vec2f(f32(byte >> 4u), f32(byte & 0x0Fu));
 }
 
 fn getTerrainColor(pos: vec2f, lod: f32) -> vec4f {
@@ -251,6 +232,7 @@ fn getAnalyticalNormalNeighborhood(worldPos: vec2f, nb: TileNeighborhood) -> vec
     let isSharp = rawSoftness < 0.001;
     let detectionSoftness = select(rawSoftness, 0.02, isSharp);
 
+    // Neighbor Mapping based on clockwise indices:
     // L:6, R:2, U:4, D:8, TL:5, TR:3, BL:7, BR:1
     let hL = nb.tiles[6].height;
     let hR = nb.tiles[2].height;
@@ -354,6 +336,29 @@ fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f3
     return colX * w.x + colY * w.y + colZ * w.z;
 }
 
+fn getTriplanarColor(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32) -> vec4f {
+    let atlasGridSize = vec2f(16.0, 16.0);
+
+    var w = pow(abs(normal), vec3f(4.0));
+    w = w / (w.x + w.y + w.z); // Normalize weights
+
+    let lookupPos = pos - (normal * 0.005);
+    let id = getTileData(floor(lookupPos.xy)).xy;
+
+    if (id.x < 0.0) { return vec4f(0.0); }
+
+    let uvZ = fract(pos.xy);
+
+    let uvX = vec2f(fract(pos.y), 1.0 - fract(pos.z*perspectiveScale));
+    let uvY = vec2f(fract(pos.x), 1.0 - fract(pos.z*perspectiveScale));
+
+    let colZ = textureSampleLevel(t_atlas, s_atlas, (id + uvZ) / atlasGridSize, lod);
+    let colX = textureSampleLevel(t_atlas, s_atlas, (id + uvX) / atlasGridSize, lod);
+    let colY = textureSampleLevel(t_atlas, s_atlas, (id + uvY) / atlasGridSize, lod);
+
+    return colX * w.x + colY * w.y + colZ * w.z;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let atlasGridSize = vec2f(16.0, 16.0);
@@ -373,42 +378,50 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var rayPos = vec3f(baseWorldPos, 2.0);
     let rayDir = normalize(vec3f(viewVec, -1.0));
 
-    var tilePos = floor(rayPos.xy);
     let gridStepDir = sign(rayDir.xy);
     let gridBorderOffset = step(vec2f(0.0), gridStepDir);
 
     var hit = false;
 
-    var nh = fetchTileNeighborhood(tilePos + 0.5);
-    var lastFetchedTile = tilePos;
+    var nh = fetchTileNeighborhood(rayPos.xy);
 
     for(var i=0; i<10; i+=1)
     {
-        if (any(tilePos != lastFetchedTile)) {
-            nh = fetchTileNeighborhood(tilePos + 0.5);
-            lastFetchedTile = tilePos;
-        }
         let tileData = nh.tiles[0];
         let tileMaxHeight = tileData.height;
 
         let tileSoftness = tileData.softness;
 
-        let gridBorder = tilePos + gridBorderOffset;
+        var gridBorder = floor(rayPos.xy) + gridBorderOffset;
 
-        var borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
+        var borderDistance = vec3f(gridBorder - rayPos.xy, min(0.0, tileMaxHeight - rayPos.z));
 
         var borderTime = borderDistance / rayDir;
 
-        if(borderTime.z <= min(borderTime.x, borderTime.y))
+        var exitTime2 = min(borderTime.x, borderTime.y);
+        var exitTime3 = min(exitTime2, borderTime.z);
+
+        if(borderTime.z <= exitTime2)
         {
             if(borderTime.z <=0.0 && tileSoftness <= 0.05)
             {
                 hit = true;
                 break;
             }
-            rayPos += rayDir * (borderTime.z + 0.001);
+
+            let prevRayPos = rayPos;
+            rayPos += rayDir * (exitTime3 + 0.005);
+
+            //if(floor(prevRayPos).x != floor(rayPos).x || floor(prevRayPos).y != floor(rayPos).y)
+            //{
+                //return vec4f(1.0, 0.0, 0.0, 1.0);
+            //}
+
             borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
-            borderTime = borderDistance / rayDir;
+            borderTime = abs(borderDistance / rayDir);
+
+            exitTime2 = min(borderTime.x, borderTime.y);
+            exitTime3 = min(exitTime2, borderTime.z);
 
             if(tileSoftness <= 0.05)
             {
@@ -417,7 +430,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
             else
             {
-                let exitTime = min(borderTime.x - 0.001, borderTime.y - 0.001);
+                let exitTime = exitTime2 - 0.005;
                 var exitRayPos = rayPos + rayDir * exitTime;
 
                 let enterHeight = getSmoothedHeightNeighborhood(rayPos.xy, nh);
@@ -430,22 +443,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
                 let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
 
-                let exitStep = min(borderTime.x, borderTime.y);
-
-                let distToEdge = min(borderTime.x, borderTime.y);
-
-                let complexityTag = getComplexityTag(rayPos.xy);
+                let complexityTag = nh.tiles[0].complexityTag;
 
                 let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(complexityTag));
 
-                let stepSize = distToEdge / f32(steps+1);
+                let stepSize = exitTime / f32(steps+1);
                 var marchedT = 0.0;
                 var foundHit = false;
 
                 for(var s = 0; s < steps; s++) {
                     marchedT += stepSize;
                     let testPos = rayPos + rayDir * marchedT;
-                    let h = getSmoothedHeightNeighborhood(testPos.xy, nh);
+                    let testPosC = clamp(testPos, min(rayPos, exitRayPos), max(rayPos, exitRayPos));
+                    let h = getSmoothedHeightNeighborhood(testPosC.xy, nh);
 
                     if(testPos.z <= h) {
                         exitRayPos = testPos;
@@ -456,23 +466,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
                 if(exitHeight < exitRayPos.z && !foundHit) //no intersection
                 {
-                    if(borderTime.x < borderTime.y)
-                    {
-                        rayPos += rayDir * (borderTime.x + 0.001);
-                        tilePos.x += gridStepDir.x;
-                    }
-                    else
-                    {
-                        rayPos += rayDir * (borderTime.y + 0.001);
-                        tilePos.y += gridStepDir.y;
-                    }
+                    rayPos += rayDir * (exitTime2 + 0.005);
+                    nh = fetchTileNeighborhood(rayPos.xy);
                 }
                 else
                 {
                     var currentRayPos = (rayPos+exitRayPos)/2.0;
                     for(var j=0; j<10; j+=1)
                     {
-                        let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);;
+                        let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);
                         let prevCurrentRayPos = currentRayPos;
                         if(currentRayPos.z > currentHeight)
                         {
@@ -489,22 +491,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                     hit = true;
                     break;
                 }
-
             }
         }
-        else if(borderTime.x < borderTime.y)
-        {
-            rayPos += rayDir * (borderTime.x + 0.001);
-            tilePos.x += gridStepDir.x;
-        }
-        else
-        {
-            rayPos += rayDir * (borderTime.y + 0.001);
-            tilePos.y += gridStepDir.y;
+        else {
+            rayPos += rayDir * (exitTime2 + 0.005);
+            nh = fetchTileNeighborhood(rayPos.xy);
         }
     }
 
     if(hit) {
+        let ct = nh.tiles[0].complexityTag;
         let normal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
         let albedo = getTriplanarColorNeighborhood(rayPos, normal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
         let normalColor = vec4f((normal + vec3f(1.0))/2.0, 1.0);

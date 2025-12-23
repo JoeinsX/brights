@@ -84,6 +84,4 @@ add_custom_target(CopyAssets
         COMMENT "Copying assets folder to binary directory..."
 )
 
-# Make your executable depend on the CopyAssets target
-# This ensures assets are checked/copied whenever you build 'brights'
 add_dependencies(brights CopyAssets)
