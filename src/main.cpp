@@ -2,14 +2,17 @@
 #include <chrono>
 #include <webgpu/webgpu.hpp>
 
+#define GLM_FORCE_DEFAULT_PACKED_GENTYPES;
+#include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
+
+
 #include <string>
 #include <random>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #include "render/wgslPreprocessor.hpp"
-#include "native/window.hpp"
+#include "platform/window.hpp"
 
 #include "render/camera.hpp"
 #include "render/native/graphicsContext.hpp"
@@ -24,42 +27,48 @@ public:
         : rng(0) {
     }
 
-    bool Initialize() {
-        Log::SetLevel(Log::Level::Info);
+    bool initialize() {
+        Log::setLevel(Log::Level::Info);
 
-        if(!window.Initialize(640, 480, "Brights: WebGPU", this))
+        if(!window.initialize(640, 480, "Brights: WebGPU", this))
             return false;
 
         instance = wgpuCreateInstance(nullptr);
-        if(!graphics.Initialize(instance, window.handle)) {
-            Log::Fatal("Failed to initialize graphics context");
+        if(!graphics.initialize(instance, window.handle)) {
+            Log::fatal("Failed to initialize graphics context");
             return false;
         }
 
-        window.SetCallbacks(OnFramebufferResize, OnCursorPos, OnMouseButton,
-                            OnScroll);
+        window.setCallbacks(onFramebufferResize, onCursorPos, onMouseButton,
+                            onScroll);
 
-        InitializeGameContent();
+        initializeGameContent();
 
-        if(!graphics.InitializeTexture()) {
-            Log::Error("Failed to load texture assets/atlas.png");
+        if(!graphics.initializeTexture()) {
+            Log::error("Failed to load texture assets/atlas.png");
             return false;
         }
-        graphics.InitializePipeline(chunk);
-        Update();
+        graphics.initializePipeline(registry, rng, camera);
+
+        worldRenderAdapter = std::make_unique<WorldRenderAdapter>(graphics.queue, graphics.chunkRefMapBuffer,
+                                                                  graphics.packedBuffer, graphics.tilemapBuffer,
+                                                                  Chunk::COUNT,
+                                                                  *world, camera);
+
+        update();
 
         lastFpsTime = std::chrono::steady_clock::now();
         return true;
     }
 
-    void Terminate() {
-        graphics.Terminate();
+    void terminate() {
+        graphics.terminate();
         if(instance) instance.release();
-        window.Terminate();
+        window.terminate();
     }
 
-    void MainLoop() {
-        window.PollEvents();
+    void mainLoop() {
+        window.pollEvents();
         frameCount++;
         auto currentTime = std::chrono::steady_clock::now();
         auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -73,18 +82,18 @@ public:
             lastFpsTime = currentTime;
         }
 
-        Update();
-        graphics.Render(window.handle);
+        update();
+        graphics.render(window.handle);
     }
 
-    bool IsRunning() { return !window.ShouldClose(); }
+    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
 
 private:
-    void InitializeGameContent() {
+    void initializeGameContent() {
         registry.Register(TileID::Grass, 0, 0, 4, 1.0);
         registry.Register(TileID::Water, 1, 0, 4, 0.6);
         registry.Register(TileID::ColdGrass, 2, 0, 4, 1.0);
-        registry.Register(TileID::Stone, 3, 0, 4, 2.0, 0.5);
+        registry.Register(TileID::Stone, 7, 0, 1, 2.0, 0.1);
         registry.Register(TileID::HardStone, 4, 0, 4, 2.0);
         registry.Register(TileID::Gravel, 5, 0, 1, 1.0, 0.5);
         registry.Register(TileID::HardGravel, 6, 0, 1, 1.0);
@@ -98,11 +107,10 @@ private:
         registry.Register(TileID::BurntGround, 11, 0, 1, 0.7);
         registry.Register(TileID::Sand, 12, 0, 4, 0.8);
 
-        WorldGenerator::Generate(chunk, rng());
-        chunk.RebuildDisplayMap(registry, rng);
+        world = std::make_unique<World>(Chunk::COUNT, registry, rng);
     }
 
-    void Update() {
+    void update() {
         int windowWidth, windowHeight;
         glfwGetFramebufferSize(window.handle, &windowWidth, &windowHeight);
 
@@ -111,22 +119,34 @@ private:
         static constexpr float basePerspectiveStrength = 0.002f;
         static constexpr float perspectiveStrength = 0.002f;
 
-        float camX = camera.GetOffsetX();
-        float camY = camera.GetOffsetY();
-        auto macroX = static_cast<int32_t>(std::floor(camX));
-        auto macroY = static_cast<int32_t>(std::floor(camY));
+        static glm::ivec2 globalChunkMove{};
+
+        world->update(camera, globalChunkMove);
+
+        worldRenderAdapter->update(camera, globalChunkMove);
+
+        float camCenterX = camera.getOffsetX();
+        float camCenterY = camera.getOffsetY();
+
+        float halfScreenWorldW = (static_cast<float>(windowWidth) * 0.5f) / camera.getScale();
+        float halfScreenWorldH = (static_cast<float>(windowHeight) * 0.5f) / camera.getScale();
+
+        float shaderOffsetX = camCenterX - halfScreenWorldW;
+        float shaderOffsetY = camCenterY - halfScreenWorldH;
+
+        auto macroX = static_cast<int32_t>(std::floor(shaderOffsetX));
+        auto macroY = static_cast<int32_t>(std::floor(shaderOffsetY));
 
         UniformData uData{
-            .macroOffsetX = macroX,
-            .macroOffsetY = macroY,
-            .offsetX = camX - static_cast<float>(macroX),
-            .offsetY = camY - static_cast<float>(macroY),
-            .resX = static_cast<float>(windowWidth),
-            .resY = static_cast<float>(windowHeight),
-            .scale = camera.GetScale(),
-            .mapSize = static_cast<float>(Chunk::GetSize()),
-            .resScaleX = windowWidth / baseResolutionX,
-            .resScaleY = windowHeight / baseResolutionY,
+            .macroOffset = {macroX, macroY},
+            .offset = {shaderOffsetX - static_cast<float>(macroX),
+                       shaderOffsetY - static_cast<float>(macroY)},
+            .res = {static_cast<float>(windowWidth), static_cast<float>(windowHeight)},
+            .scale = camera.getScale(),
+            .mapSize = static_cast<float>(Chunk::getSize() * Chunk::COUNT),
+            .mapSizeChunks = Chunk::COUNT,
+            .chunkSize = Chunk::SIZE,
+            .resScale = {windowWidth / baseResolutionX, windowHeight / baseResolutionY},
             .perspectiveStrength = perspectiveStrength,
             .perspectiveScale = perspectiveStrength / basePerspectiveStrength
         };
@@ -135,32 +155,32 @@ private:
                                    sizeof(UniformData));
     }
 
-    static void OnFramebufferResize(GLFWwindow* window, int, int) {
-        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(
+    static void onFramebufferResize(GLFWwindow* window, int, int) {
+        const auto app = static_cast<Application*>(glfwGetWindowUserPointer(
             window));
         if(app && app->continuousResize) {
-            app->Update();
-            app->graphics.Render(app->window.handle);
+            app->update();
+            app->graphics.render(app->window.handle);
         }
     }
 
-    static void OnCursorPos(GLFWwindow* window, double xpos, double ypos) {
-        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(
+    static void onCursorPos(GLFWwindow* window, double xpos, double ypos) {
+        const auto app = static_cast<Application*>(glfwGetWindowUserPointer(
             window));
         if(app) {
             if(app->isDragging) {
-                float dx = static_cast<float>(xpos - app->lastMouseX);
-                float dy = static_cast<float>(ypos - app->lastMouseY);
-                app->camera.Pan(dx, dy);
+                auto dx = static_cast<float>(xpos - app->lastMouseX);
+                auto dy = static_cast<float>(ypos - app->lastMouseY);
+                app->camera.pan(dx, dy);
             }
             app->lastMouseX = xpos;
             app->lastMouseY = ypos;
         }
     }
 
-    static void OnMouseButton(GLFWwindow* window, int button, int action,
+    static void onMouseButton(GLFWwindow* window, int button, int action,
                               int mods) {
-        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(
+        const auto app = static_cast<Application*>(glfwGetWindowUserPointer(
             window));
         if(app && button == GLFW_MOUSE_BUTTON_LEFT) {
             if(action == GLFW_PRESS) {
@@ -173,20 +193,24 @@ private:
         }
     }
 
-    static void OnScroll(GLFWwindow* window, double xoffset, double yoffset) {
-        auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(
+    static void onScroll(GLFWwindow* window, double /*xoffset*/, double yoffset) {
+        const auto app = static_cast<Application*>(glfwGetWindowUserPointer(
             window));
-        if(app)
-            app->camera.Zoom(static_cast<float>(yoffset),
-                             app->lastMouseX, app->lastMouseY);
+        if(app) {
+            int width, height;
+            glfwGetFramebufferSize(window, &width, &height);
+            app->camera.zoom(static_cast<float>(yoffset),
+                             app->lastMouseX, app->lastMouseY, width, height);
+        }
     }
 
     Window window;
     GraphicsContext graphics;
+    std::unique_ptr<World> world;
+    std::unique_ptr<WorldRenderAdapter> worldRenderAdapter;
     wgpu::Instance instance = nullptr;
 
     TileRegistry registry;
-    Chunk chunk;
     Camera camera;
     std::mt19937 rng;
 
@@ -201,10 +225,10 @@ private:
 
 int main() {
     Application app;
-    if(!app.Initialize()) return 1;
-    while(app.IsRunning()) {
-        app.MainLoop();
+    if(!app.initialize()) return 1;
+    while(app.isRunning()) {
+        app.mainLoop();
     }
-    app.Terminate();
+    app.terminate();
     return 0;
 }

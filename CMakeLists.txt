@@ -18,8 +18,9 @@ add_executable(brights src/main.cpp
         src/world/chunk.hpp
         src/world/tile.hpp
         src/render/native/graphicsContext.hpp
-        src/native/window.hpp
+        src/platform/window.hpp
         src/util/logger.hpp
+        src/world/world.hpp
 )
 
 set_target_properties(brights PROPERTIES
@@ -69,11 +70,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-add_library(MyStbImage INTERFACE)
-target_include_directories(MyStbImage INTERFACE ${stb_SOURCE_DIR})
+FetchContent_Declare(
+        glm
+        GIT_REPOSITORY https://github.com/g-truc/glm.git
+        GIT_TAG 1.0.2
+)
+FetchContent_MakeAvailable(glm)
+
+add_library(stbWrp INTERFACE)
+target_include_directories(stbWrp INTERFACE ${stb_SOURCE_DIR})
 
 
-target_link_libraries(brights PRIVATE webgpu glfw glfw3webgpu FastNoise2 MyStbImage)
+target_link_libraries(brights PRIVATE webgpu glfw glfw3webgpu FastNoise2 stbWrp glm)
 
 target_copy_webgpu_binaries(brights)
 

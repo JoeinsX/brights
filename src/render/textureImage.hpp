@@ -1,5 +1,8 @@
 #pragma once
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 class TextureImage {
 public:
     TextureImage(const std::string& filepath) {
@@ -22,10 +25,10 @@ public:
         other.data = nullptr;
     }
 
-    [[nodiscard]] bool IsValid() const { return data != nullptr; }
-    [[nodiscard]] int GetWidth() const { return width; }
-    [[nodiscard]] int GetHeight() const { return height; }
-    [[nodiscard]] const unsigned char* GetData() const { return data; }
+    [[nodiscard]] bool isValid() const { return data != nullptr; }
+    [[nodiscard]] int getWidth() const { return width; }
+    [[nodiscard]] int getHeight() const { return height; }
+    [[nodiscard]] const unsigned char* getData() const { return data; }
 
 private:
     unsigned char* data = nullptr;

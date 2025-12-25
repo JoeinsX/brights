@@ -3,9 +3,12 @@
 
 class Chunk {
 public:
-    static constexpr int SIZE = 4096;
+    static constexpr int SIZE = 64;
+    static constexpr int COUNT = 32;
+    static constexpr int COUNT_SQUARED = COUNT * COUNT;
 
-    Chunk() {
+    Chunk(glm::ivec2 pos)
+        : pos(pos) {
         terrainMap.resize(SIZE * SIZE, TileID::Water);
         wallMap.resize(SIZE * SIZE, TileID::Air);
         displayMap.resize(SIZE * SIZE, 0);
@@ -14,58 +17,57 @@ public:
         packedMap.resize(SIZE * SIZE, 0);
     }
 
-    void SetTerrain(int x, int y, TileID id) {
+    void setTerrain(const int x, const int y, TileID id) {
         if(x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
         terrainMap[y * SIZE + x] = id;
     }
 
-    void SetWall(int x, int y, TileID id) {
+    void setWall(int x, int y, TileID id) {
         if(x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
         wallMap[y * SIZE + x] = id;
     }
 
-    std::pair<float, float> GetAtlasCoords(const TileRegistry& registry,
-                                           TileID id, std::mt19937& rng) {
+    static glm::vec2 getAtlasCoords(const TileRegistry& registry,
+                                    TileID id, std::mt19937& rng) {
         if(id == TileID::Air) return {-1.0f, -1.0f};
 
-        const TileDefinition* def = registry.Get(id);
+        const TileDefinition* def = registry.get(id);
         if(!def) return {-1.0f, -1.0f};
 
-        float atlasX = static_cast<float>(def->atlasBaseX);
-        float atlasY = static_cast<float>(def->atlasBaseY);
+        auto atlasBase = def->atlasBase;
 
         if(def->variationCount > 1) {
             std::uniform_int_distribution<int> dist(0, def->variationCount - 1);
-            atlasY += static_cast<float>(dist(rng));
+            atlasBase.y += static_cast<float>(dist(rng));
         }
 
-        return {atlasX, atlasY};
+        return static_cast<glm::vec2>(atlasBase);
     }
 
-    void RebuildDisplayMap(const TileRegistry& registry, std::mt19937& rng) {
+    void rebuildDisplayMap(const TileRegistry& registry, std::mt19937& rng) {
         for(int y = 0; y < SIZE; ++y) {
             for(int x = 0; x < SIZE; ++x) {
                 int index = y * SIZE + x;
                 TileID tID = terrainMap[index];
                 TileID wID = wallMap[index];
 
-                auto terrainCoords = GetAtlasCoords(registry, tID, rng);
-                auto wallCoords = GetAtlasCoords(registry, wID, rng);
+                auto terrainCoords = getAtlasCoords(registry, tID, rng);
+                auto wallCoords = getAtlasCoords(registry, wID, rng);
 
-                uint8_t tx = static_cast<uint8_t>(std::clamp(terrainCoords.first, 0.0f, 15.0f));
-                uint8_t ty = static_cast<uint8_t>(std::clamp(terrainCoords.second, 0.0f, 15.0f));
+                uint8_t tx = static_cast<uint8_t>(std::clamp(terrainCoords.x, 0.0f, 15.0f));
+                uint8_t ty = static_cast<uint8_t>(std::clamp(terrainCoords.y, 0.0f, 15.0f));
 
                 displayMap[index] = (tx << 4) | (ty & 0x0F);
 
-                const TileDefinition* def = registry.Get(tID);
+                const TileDefinition* def = registry.get(tID);
                 heightMap[index] = def ? def->height : 0.0f;
             }
         }
 
-        PrebuildSoftnessMap(registry);
+        prebuildSoftnessMap(registry);
     }
 
-    void PrebuildSoftnessMap(const TileRegistry& registry) {
+    void prebuildSoftnessMap(const TileRegistry& registry) {
         const int allNeighbors[8][2] = {
             {-1, -1}, {0, -1}, {1, -1},
             {-1, 0}, {1, 0},
@@ -84,7 +86,7 @@ public:
                 int index = y * SIZE + x;
 
                 TileID tID = terrainMap[index];
-                const TileDefinition* def = registry.Get(tID);
+                const TileDefinition* def = registry.get(tID);
                 float defaultSoftness = def ? def->softness : 0.0f;
                 float currentHeight = heightMap[index];
 
@@ -99,7 +101,7 @@ public:
                             int nIndex = ny * SIZE + nx;
                             float nHeight = heightMap[nIndex];
                             TileID nID = terrainMap[nIndex];
-                            const TileDefinition* nDef = registry.Get(nID);
+                            const TileDefinition* nDef = registry.get(nID);
                             float nSoftness = nDef ? nDef->softness : 0.0f;
 
                             bool isSameHeight = std::abs(
@@ -158,25 +160,25 @@ public:
         }
     }
 
-    [[nodiscard]] const std::vector<uint8_t>& GetDisplayData() const {
+    [[nodiscard]] const std::vector<uint8_t>& getDisplayData() const {
         return displayMap;
     }
 
-    [[nodiscard]] const std::vector<float>& GetHeightData() const {
+    [[nodiscard]] const std::vector<float>& getHeightData() const {
         return heightMap;
     }
 
-    [[nodiscard]] const std::vector<float>& GetSoftnessData() const {
+    [[nodiscard]] const std::vector<float>& getSoftnessData() const {
         return softnessMap;
     }
 
-    [[nodiscard]] const std::vector<uint16_t>& GetPackedData() const {
+    [[nodiscard]] const std::vector<uint16_t>& getPackedData() const {
         return packedMap;
     }
 
-    static int GetSize() { return SIZE; }
+    static int getSize() { return SIZE; }
 
-private:
+    //private:
     std::vector<TileID> terrainMap;
     std::vector<TileID> wallMap;
     std::vector<uint8_t> displayMap;
@@ -184,4 +186,8 @@ private:
     std::vector<float> softnessMap;
 
     std::vector<uint16_t> packedMap;
+
+    glm::ivec2 pos{};
+
+    bool needsReloading = true;
 };

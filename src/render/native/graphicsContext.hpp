@@ -1,7 +1,10 @@
 #pragma once
 
+#include "../../world/worldGenerator.hpp"
 #include "world/chunk.hpp"
 #include "render/textureImage.hpp"
+
+#include "world/world.hpp"
 
 namespace ShaderSlots {
     constexpr uint32_t Uniforms = 0;
@@ -9,16 +12,19 @@ namespace ShaderSlots {
     constexpr uint32_t TextureAtlas = 2;
     constexpr uint32_t Sampler = 3;
     constexpr uint32_t PackedMap = 4;
-    constexpr uint32_t Num = 5;
+    constexpr uint32_t ChunkRefMap = 5;
+    constexpr uint32_t Num = 6;
 }
 
 struct UniformData {
-    int32_t macroOffsetX, macroOffsetY;
-    float offsetX, offsetY;
-    float resX, resY;
+    glm::ivec2 macroOffset;
+    glm::vec2 offset;
+    glm::vec2 res;
     float scale;
     float mapSize;
-    float resScaleX, resScaleY;
+    uint32_t mapSizeChunks;
+    uint32_t chunkSize;
+    glm::vec2 resScale;
     float perspectiveStrength;
     float perspectiveScale;
 };
@@ -34,6 +40,7 @@ public:
 
     wgpu::Buffer tilemapBuffer = nullptr;
     wgpu::Buffer packedBuffer = nullptr;
+    wgpu::Buffer chunkRefMapBuffer = nullptr;
 
     wgpu::Buffer uniformBuffer = nullptr;
     wgpu::Texture texture = nullptr;
@@ -42,7 +49,9 @@ public:
     wgpu::BindGroup bindGroup = nullptr;
     wgpu::BindGroupLayout bindGroupLayout = nullptr;
 
-    bool Initialize(wgpu::Instance instance, GLFWwindow* window) {
+    WorldRenderAdapter* worldRenderAdapter = nullptr;
+
+    bool initialize(wgpu::Instance instance, GLFWwindow* window) {
         surface = glfwGetWGPUSurface(instance, window);
 
         wgpu::RequestAdapterOptions adapterOpts = {};
@@ -69,15 +78,15 @@ public:
         return true;
     }
 
-    bool InitializeTexture() {
+    bool initializeTexture() {
         TextureImage image("assets/atlas.png");
-        if(!image.IsValid()) return false;
+        if(!image.isValid()) return false;
 
         wgpu::TextureDescriptor textureDesc;
         textureDesc.dimension = wgpu::TextureDimension::_2D;
         textureDesc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
-        textureDesc.size = {static_cast<uint32_t>(image.GetWidth()),
-                            static_cast<uint32_t>(image.GetHeight()), 1};
+        textureDesc.size = {static_cast<uint32_t>(image.getWidth()),
+                            static_cast<uint32_t>(image.getHeight()), 1};
         textureDesc.mipLevelCount = 8;
         textureDesc.sampleCount = 1;
         textureDesc.usage = wgpu::TextureUsage::TextureBinding |
@@ -92,8 +101,8 @@ public:
 
         wgpu::TextureDataLayout source;
         source.offset = 0;
-        source.bytesPerRow = 4 * image.GetWidth();
-        source.rowsPerImage = image.GetHeight();
+        source.bytesPerRow = 4 * image.getWidth();
+        source.rowsPerImage = image.getHeight();
 
         wgpu::Extent3D mipLevelSize = textureDesc.size;
 
@@ -104,10 +113,10 @@ public:
                 for(uint32_t j = 0; j < mipLevelSize.height; ++j) {
                     uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
                     if(level == 0) {
-                        p[0] = image.GetData()[4 * (j * mipLevelSize.width + i)];
-                        p[1] = image.GetData()[4 * (j * mipLevelSize.width + i) + 1];
-                        p[2] = image.GetData()[4 * (j * mipLevelSize.width + i) + 2];
-                        p[3] = image.GetData()[4 * (j * mipLevelSize.width + i) + 3];
+                        p[0] = image.getData()[4 * (j * mipLevelSize.width + i)];
+                        p[1] = image.getData()[4 * (j * mipLevelSize.width + i) + 1];
+                        p[2] = image.getData()[4 * (j * mipLevelSize.width + i) + 2];
+                        p[3] = image.getData()[4 * (j * mipLevelSize.width + i) + 3];
                     } else {
                         uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 0))];
                         uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 1))];
@@ -157,27 +166,29 @@ public:
         return true;
     }
 
-    void InitializePipeline(Chunk& chunk) {
-        const auto& displayData = chunk.GetDisplayData();
-        const auto& heightData = chunk.GetHeightData();
-        const auto& softnessData = chunk.GetSoftnessData();
+    void initializePipeline(TileRegistry& registry, std::mt19937& rng, Camera& camera) {
+        Chunk chunk{{0, 0}};
+        const auto& displayData = chunk.getDisplayData();
 
-        const auto& packedData = chunk.GetPackedData();
+        const auto& packedData = chunk.getPackedData();
         wgpu::BufferDescriptor storageBufDesc;
         storageBufDesc.usage = wgpu::BufferUsage::Storage |
                                wgpu::BufferUsage::CopyDst;
-        storageBufDesc.size = displayData.size() * sizeof(uint8_t);
+        storageBufDesc.size = displayData.size() * Chunk::COUNT_SQUARED * sizeof(uint8_t);
         tilemapBuffer = device.createBuffer(storageBufDesc);
-        queue.writeBuffer(tilemapBuffer, 0, displayData.data(),
-                          storageBufDesc.size);
 
         wgpu::BufferDescriptor packedBufDesc;
         packedBufDesc.usage = wgpu::BufferUsage::Storage |
                               wgpu::BufferUsage::CopyDst;
-        packedBufDesc.size = packedData.size() * sizeof(uint16_t);
+        packedBufDesc.size = packedData.size() * Chunk::COUNT_SQUARED * sizeof(uint16_t);
         packedBuffer = device.createBuffer(packedBufDesc);
-        queue.writeBuffer(packedBuffer, 0, packedData.data(),
-                          packedBufDesc.size);
+
+        wgpu::BufferDescriptor chunkRefMapBufDesc;
+        chunkRefMapBufDesc.usage = wgpu::BufferUsage::Storage |
+                                   wgpu::BufferUsage::CopyDst;
+        chunkRefMapBufDesc.size = Chunk::COUNT_SQUARED * sizeof(uint32_t);
+        chunkRefMapBuffer = device.createBuffer(chunkRefMapBufDesc);
+
 
         wgpu::BufferDescriptor uniformBufDesc;
         uniformBufDesc.usage = wgpu::BufferUsage::Uniform |
@@ -209,7 +220,7 @@ public:
         bgEntries[ShaderSlots::TileMap].buffer.type =
             wgpu::BufferBindingType::ReadOnlyStorage;
         bgEntries[ShaderSlots::TileMap].buffer.minBindingSize =
-            displayData.size() * sizeof(uint8_t);
+            displayData.size() * Chunk::COUNT_SQUARED * sizeof(uint8_t);
 
         bgEntries[ShaderSlots::TextureAtlas].binding =
             ShaderSlots::TextureAtlas;
@@ -232,7 +243,15 @@ public:
         bgEntries[ShaderSlots::PackedMap].buffer.type =
             wgpu::BufferBindingType::ReadOnlyStorage;
         bgEntries[ShaderSlots::PackedMap].buffer.minBindingSize =
-            packedData.size() * sizeof(uint16_t);
+            packedData.size() * Chunk::COUNT_SQUARED * sizeof(uint16_t);
+
+        bgEntries[ShaderSlots::ChunkRefMap].binding = ShaderSlots::ChunkRefMap;
+        bgEntries[ShaderSlots::ChunkRefMap].visibility =
+            wgpu::ShaderStage::Fragment;
+        bgEntries[ShaderSlots::ChunkRefMap].buffer.type =
+            wgpu::BufferBindingType::ReadOnlyStorage;
+        bgEntries[ShaderSlots::ChunkRefMap].buffer.minBindingSize =
+            Chunk::COUNT_SQUARED * sizeof(uint32_t);
 
         wgpu::BindGroupLayoutDescriptor bglDesc;
         bglDesc.entryCount = ShaderSlots::Num;
@@ -253,7 +272,7 @@ public:
         bgGroupEntries[ShaderSlots::TileMap].binding = ShaderSlots::TileMap;
         bgGroupEntries[ShaderSlots::TileMap].buffer = tilemapBuffer;
         bgGroupEntries[ShaderSlots::TileMap].size =
-            displayData.size() * sizeof(uint8_t);
+            displayData.size() * Chunk::COUNT_SQUARED * sizeof(uint8_t);
 
         bgGroupEntries[ShaderSlots::TextureAtlas].binding =
             ShaderSlots::TextureAtlas;
@@ -266,7 +285,13 @@ public:
             ShaderSlots::PackedMap;
         bgGroupEntries[ShaderSlots::PackedMap].buffer = packedBuffer;
         bgGroupEntries[ShaderSlots::PackedMap].size =
-            packedData.size() * sizeof(uint16_t);
+            packedData.size() * Chunk::COUNT_SQUARED * sizeof(uint16_t);
+
+        bgGroupEntries[ShaderSlots::ChunkRefMap].binding =
+            ShaderSlots::ChunkRefMap;
+        bgGroupEntries[ShaderSlots::ChunkRefMap].buffer = chunkRefMapBuffer;
+        bgGroupEntries[ShaderSlots::ChunkRefMap].size =
+            Chunk::COUNT_SQUARED * sizeof(uint32_t);
 
         wgpu::BindGroupDescriptor bgDesc;
         bgDesc.layout = bindGroupLayout;
@@ -305,7 +330,7 @@ public:
         pipelineLayout.release();
     }
 
-    wgpu::TextureView GetNextSurfaceTextureView(GLFWwindow* window) {
+    wgpu::TextureView getNextSurfaceTextureView(GLFWwindow* window) {
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
         if(width == 0 || height == 0) return nullptr;
@@ -332,8 +357,8 @@ public:
         return wgpuTextureCreateView(surfaceTexture.texture, &viewDesc);
     }
 
-    void Render(GLFWwindow* window) {
-        wgpu::TextureView targetView = GetNextSurfaceTextureView(window);
+    void render(GLFWwindow* window) {
+        wgpu::TextureView targetView = getNextSurfaceTextureView(window);
         if(!targetView) return;
 
         wgpu::CommandEncoder encoder = device.createCommandEncoder({});
@@ -363,7 +388,7 @@ public:
         surface.present();
     }
 
-    void Terminate() {
+    void terminate() {
         if(bindGroup) bindGroup.release();
         if(bindGroupLayout) bindGroupLayout.release();
         if(tilemapBuffer) tilemapBuffer.release();

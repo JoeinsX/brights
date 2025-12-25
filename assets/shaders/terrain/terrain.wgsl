@@ -8,7 +8,9 @@ struct Uniforms {
     offset: vec2f,
     resolution: vec2f,
     scale: f32,
-    mapSize: f32,
+    mapSizeTiles: f32,
+    mapSizeChunks: u32,
+    chunkSize: u32,
     resolutionScale: vec2f,
     perspectiveStrength: f32,
     perspectiveScale: f32,
@@ -19,6 +21,7 @@ struct Uniforms {
 @group(0) @binding(2) var t_atlas: texture_2d<f32>;
 @group(0) @binding(3) var s_atlas: sampler;
 @group(0) @binding(4) var<storage, read> s_packed: array<u32>;
+@group(0) @binding(5) var<storage, read> s_chunkRefMap: array<u32>;
 
 struct TileData {
     height: f32,
@@ -52,9 +55,26 @@ fn unpackTileData(word: u32, isIdxOdd: bool) -> TileData
     return TileData(h, s, t);
 }
 
+fn getTileIdx(pos: vec2f) -> u32
+{
+    let mapSizeTiles = u32(u_config.mapSizeTiles);
+
+    let absPos = vec2u(vec2i(floor(pos)) + u_config.macroOffset);
+
+    let chunkPos = absPos/u_config.chunkSize;
+    let tilePos = absPos%u_config.chunkSize;
+
+    let chunkIdx = chunkPos.y*u_config.mapSizeChunks+chunkPos.x;
+
+    let chunkOffset = s_chunkRefMap[chunkIdx];
+
+    let idx = chunkOffset + u32(tilePos.y) * u_config.chunkSize + u32(tilePos.x);
+    return idx;
+}
+
 fn fetchTileData(pos: vec2f) -> TileData {
-    let mapSize = u_config.mapSize;
-    let idx = u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSize) + u32(i32(pos.x) + u_config.macroOffset.x);
+    let mapSizeTiles = u_config.mapSizeTiles;
+    let idx = getTileIdx(pos);
 
     // Each u32 contains 2 tiles (16 bits each)
     let word = s_packed[idx / 2u];
@@ -62,8 +82,8 @@ fn fetchTileData(pos: vec2f) -> TileData {
 }
 
 fn fetchTwoTiles(pos: vec2f, isFirstTileOdd: bool) -> array<TileData, 2> {
-    let mapSize = u_config.mapSize;
-    let idx = u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSize) + u32(i32(pos.x) + u_config.macroOffset.x);
+    let mapSizeTiles = u_config.mapSizeTiles;
+    let idx = getTileIdx(pos);//u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSizeTiles) + u32(i32(pos.x) + u_config.macroOffset.x);
 
     // Each u32 contains 2 tiles (16 bits each)
     let word = s_packed[idx / 2u];
@@ -77,8 +97,8 @@ fn fetchTileNeighborhood(pos: vec2f) -> TileNeighborhood {
 
     // FIX: Calculate absolute world position to determine packing parity
     let absTilePos = vec2i(tilePos) + u_config.macroOffset;
-    let mapSize = u32(u_config.mapSize);
-    let centerIdx = u32(absTilePos.y) * mapSize + u32(absTilePos.x);
+    let mapSizeTiles = u32(u_config.mapSizeTiles);
+    let centerIdx = getTileIdx(pos);
     let isCenterOdd = (centerIdx % 2u) != 0u;
 
     if (isCenterOdd) {
@@ -191,17 +211,17 @@ fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     return mix(targetH, centerH, profile);
 }
 
-
 fn getTileData(pos: vec2f) -> vec2f {
-    let mapSize = u32(u_config.mapSize);
+    let mapSizeTiles = u32(u_config.mapSizeTiles);
 
-    let absPos = vec2i(floor(pos + 0.005)) + u_config.macroOffset;
+    let absPos = vec2i(floor(pos)) + u_config.macroOffset;
 
-    if (absPos.x < 0 || absPos.x >= i32(mapSize) || absPos.y < 0 || absPos.y >= i32(mapSize)) {
+    if (absPos.x < 0 || absPos.x >= i32(mapSizeTiles) || absPos.y < 0 || absPos.y >= i32(mapSizeTiles)) {
         return vec2f(-1.0);
     }
 
-    let idx = u32(absPos.y) * mapSize + u32(absPos.x);
+    let idx = getTileIdx(pos);
+
     let word = s_tilemap[idx / 4u];
     let shift = (idx % 4u) * 8u;
     let byte = (word >> shift) & 0xFFu;
@@ -359,12 +379,14 @@ fn getTriplanarColor(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32)
     return colX * w.x + colY * w.y + colZ * w.z;
 }
 
+const PI = 3.1415926535897932384626433832795;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let atlasGridSize = vec2f(16.0, 16.0);
 
     let screenPos = in.uv * u_config.resolution;
-    let baseWorldPos = (screenPos / u_config.scale) + u_config.offset;
+    var baseWorldPos = (screenPos / u_config.scale) + u_config.offset;
     let resolutionScale = u_config.resolutionScale;
     let viewCenter = u_config.offset + (u_config.resolution / u_config.scale) * 0.5;
 
@@ -373,9 +395,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     let viewVec = (baseWorldPos - viewCenter) * u_config.scale * perspectiveStrength / resolutionScale;
 
+    let radialVector = baseWorldPos - viewCenter;
+    let sphereRadius = u_config.mapSizeTiles / 3.0;
+
+    let p = radialVector / sphereRadius;
+    let distSq = dot(p, p);
+
+    if(distSq > 1.0)
+    {
+        discard;
+    }
+
+    let z = sqrt(1.0 - distSq);
+    let normal_sphere = vec3f(p.x, p.y, z);
+
+    let phi = atan2(normal_sphere.x, normal_sphere.z);
+    let theta = asin(normal_sphere.y);
+
+    let u = (phi / ( 3.14159265));
+    let v = (theta / 3.14159265);
+
+    baseWorldPos = viewCenter + vec2f(u, v) * u_config.mapSizeTiles;
+
     var finalColor = vec4f(0.0);
 
     var rayPos = vec3f(baseWorldPos, 2.0);
+
     let rayDir = normalize(vec3f(viewVec, -1.0));
 
     let gridStepDir = sign(rayDir.xy);

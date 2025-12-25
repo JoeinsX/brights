@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 enum class TileID : uint8_t {
     Air = 0,
     Grass,
@@ -21,8 +23,7 @@ enum class TileID : uint8_t {
 };
 
 struct TileDefinition {
-    int atlasBaseX = 0;
-    int atlasBaseY = 0;
+    glm::ivec2 atlasBase;
     int variationCount = 1;
     float height = 0.5f;
     float softness = 0.5f;
@@ -30,14 +31,14 @@ struct TileDefinition {
 
 class TileRegistry {
 public:
-    void Register(TileID id, int x, int y, int variations,
+    void Register(const TileID id, const int x, const int y, const int variations,
                   float height = 0.5f,
                   float softness = 0.5f) {
-        defs[id] = {x, y, variations, height, softness};
+        defs[id] = {{x, y}, variations, height, softness};
     }
 
-    const TileDefinition* Get(TileID id) const {
-        auto it = defs.find(id);
+    [[nodiscard]] const TileDefinition* get(const TileID id) const {
+        const auto it = defs.find(id);
         if(it != defs.end()) return &it->second;
         return nullptr;
     }

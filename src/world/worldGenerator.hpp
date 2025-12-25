@@ -1,11 +1,13 @@
 #pragma once
+#include "chunk.hpp"
 #include "FastNoise/FastNoise.h"
 
 class WorldGenerator {
 public
 :
-    static void Generate(Chunk& chunk, int seed) {
-        int size = Chunk::GetSize();
+    static void generate(Chunk& chunk, int seed) {
+        glm::ivec2 offset = chunk.pos * Chunk::SIZE;
+        int size = Chunk::getSize();
 
         // 1. Elevation Noise
         auto fnElevation = FastNoise::New<FastNoise::FractalFBm>();
@@ -31,13 +33,13 @@ public
         std::vector<float> moistureMap(size * size);
         std::vector<float> oreMap(size * size);
 
-        fnElevation->GenUniformGrid2D(elevationMap.data(), 0, 0, size, size,
+        fnElevation->GenUniformGrid2D(elevationMap.data(), offset.x, offset.y, size, size,
                                       0.02f, seed);
-        fnTemperature->GenUniformGrid2D(tempMap.data(), 0, 0, size, size, 0.01f,
+        fnTemperature->GenUniformGrid2D(tempMap.data(), offset.x, offset.y, size, size, 0.01f,
                                         seed + 1923);
-        fnMoisture->GenUniformGrid2D(moistureMap.data(), 0, 0, size, size,
+        fnMoisture->GenUniformGrid2D(moistureMap.data(), offset.x, offset.y, size, size,
                                      0.05f, seed + 4821);
-        fnOre->GenUniformGrid2D(oreMap.data(), 0, 0, size, size, 0.2f,
+        fnOre->GenUniformGrid2D(oreMap.data(), offset.x, offset.y, size, size, 0.2f,
                                 seed + 9991);
 
         for(int y = 0; y < size; ++y) {
@@ -76,8 +78,8 @@ public
                     else wall = TileID::Planks;
                 }
 
-                chunk.SetTerrain(x, y, terrain);
-                chunk.SetWall(x, y, wall);
+                chunk.setTerrain(x, y, terrain);
+                chunk.setWall(x, y, wall);
             }
         }
     }

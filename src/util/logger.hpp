@@ -19,7 +19,7 @@ private:
         bool ShowLocation;
     };
 
-    static constexpr LevelConfig GetConfig(Level level) {
+    static constexpr LevelConfig getConfig(Level level) {
         switch(level) {
         case Level::Trace: return {"TRACE", true};
         case Level::Debug: return {"DEBUG", true};
@@ -35,52 +35,52 @@ private:
     static inline std::atomic<Level> s_MinLevel{Level::Trace};
 
 public:
-    static void SetLevel(Level level) { s_MinLevel.store(level); }
+    static void setLevel(Level level) { s_MinLevel.store(level); }
 
     template<typename... Args>
-    static void Trace(std::format_string<Args...> fmt, Args&&... args) {
+    static void trace(std::format_string<Args...> fmt, Args&&... args) {
         LogImpl<Level::Trace>(fmt, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
-    static void Info(std::format_string<Args...> fmt, Args&&... args) {
+    static void info(std::format_string<Args...> fmt, Args&&... args) {
         LogImpl<Level::Info>(fmt, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
-    static void Warn(std::format_string<Args...> fmt, Args&&... args) {
+    static void warn(std::format_string<Args...> fmt, Args&&... args) {
         LogImpl<Level::Warn>(fmt, std::forward<Args>(args)...);
     }
 
     template<typename... Args>
-    static void Error(std::format_string<Args...> fmt, Args&&... args,
+    static void error(std::format_string<Args...> fmt, Args&&... args,
                       const std::source_location& loc =
                           std::source_location::current()) {
-        LogImpl<Level::Error>(fmt, std::forward<Args>(args)..., loc);
+        logImpl<Level::Error>(fmt, std::forward<Args>(args)..., loc);
     }
 
     template<typename... Args>
-    static void Critical(std::format_string<Args...> fmt, Args&&... args,
+    static void critical(std::format_string<Args...> fmt, Args&&... args,
                          const std::source_location& loc =
                              std::source_location::current()) {
         LogImpl<Level::Critical>(fmt, std::forward<Args>(args)..., loc);
     }
 
     template<typename... Args>
-    static void Fatal(std::format_string<Args...> fmt, Args&&... args,
+    static void fatal(std::format_string<Args...> fmt, Args&&... args,
                       const std::source_location& loc =
                           std::source_location::current()) {
-        LogImpl<Level::Fatal>(fmt, std::forward<Args>(args)..., loc);
+        logImpl<Level::Fatal>(fmt, std::forward<Args>(args)..., loc);
     }
 
 private:
     template<Level L, typename... Args>
-    static void LogImpl(std::format_string<Args...> fmt, Args&&... args,
+    static void logImpl(std::format_string<Args...> fmt, Args&&... args,
                         const std::source_location& loc =
                             std::source_location::current()) {
         if(L < s_MinLevel.load()) return;
 
-        constexpr LevelConfig Config = GetConfig(L);
+        constexpr LevelConfig Config = getConfig(L);
 
         const auto now = std::chrono::system_clock::now();
 
