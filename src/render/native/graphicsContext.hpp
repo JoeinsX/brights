@@ -21,9 +21,10 @@ struct UniformData {
     glm::vec2 offset;
     glm::vec2 res;
     float scale;
-    float mapSize;
-    uint32_t mapSizeChunks;
+    uint32_t mapSize;
+    float sphereMapScale;
     uint32_t chunkSize;
+    glm::ivec2 chunkOffset;
     glm::vec2 resScale;
     float perspectiveStrength;
     float perspectiveScale;
@@ -188,7 +189,6 @@ public:
                                    wgpu::BufferUsage::CopyDst;
         chunkRefMapBufDesc.size = Chunk::COUNT_SQUARED * sizeof(uint32_t);
         chunkRefMapBuffer = device.createBuffer(chunkRefMapBufDesc);
-
 
         wgpu::BufferDescriptor uniformBufDesc;
         uniformBufDesc.usage = wgpu::BufferUsage::Uniform |

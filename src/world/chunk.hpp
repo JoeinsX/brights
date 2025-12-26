@@ -3,8 +3,8 @@
 
 class Chunk {
 public:
-    static constexpr int SIZE = 64;
-    static constexpr int COUNT = 32;
+    static constexpr int SIZE = 32;
+    static constexpr int COUNT = 16;
     static constexpr int COUNT_SQUARED = COUNT * COUNT;
 
     Chunk(glm::ivec2 pos)

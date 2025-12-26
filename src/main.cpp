@@ -50,9 +50,12 @@ public:
         }
         graphics.initializePipeline(registry, rng, camera);
 
+        worldGenerator = std::make_unique<WorldGenerator>();
+        world = std::make_unique<World>(registry, rng, *worldGenerator, Chunk::COUNT / 2, 0);
+
         worldRenderAdapter = std::make_unique<WorldRenderAdapter>(graphics.queue, graphics.chunkRefMapBuffer,
                                                                   graphics.packedBuffer, graphics.tilemapBuffer,
-                                                                  Chunk::COUNT,
+                                                                  Chunk::COUNT / 2,
                                                                   *world, camera);
 
         update();
@@ -106,8 +109,6 @@ private:
         registry.Register(TileID::ColdWater, 1, 5, 4, 0.7);
         registry.Register(TileID::BurntGround, 11, 0, 1, 0.7);
         registry.Register(TileID::Sand, 12, 0, 4, 0.8);
-
-        world = std::make_unique<World>(Chunk::COUNT, registry, rng);
     }
 
     void update() {
@@ -143,9 +144,10 @@ private:
                        shaderOffsetY - static_cast<float>(macroY)},
             .res = {static_cast<float>(windowWidth), static_cast<float>(windowHeight)},
             .scale = camera.getScale(),
-            .mapSize = static_cast<float>(Chunk::getSize() * Chunk::COUNT),
-            .mapSizeChunks = Chunk::COUNT,
+            .mapSize = static_cast<uint32_t>(Chunk::getSize()) * Chunk::COUNT,
+            .sphereMapScale = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT),
             .chunkSize = Chunk::SIZE,
+            .chunkOffset = globalChunkMove,
             .resScale = {windowWidth / baseResolutionX, windowHeight / baseResolutionY},
             .perspectiveStrength = perspectiveStrength,
             .perspectiveScale = perspectiveStrength / basePerspectiveStrength
@@ -206,6 +208,7 @@ private:
 
     Window window;
     GraphicsContext graphics;
+    std::unique_ptr<WorldGenerator> worldGenerator;
     std::unique_ptr<World> world;
     std::unique_ptr<WorldRenderAdapter> worldRenderAdapter;
     wgpu::Instance instance = nullptr;

@@ -8,9 +8,10 @@ struct Uniforms {
     offset: vec2f,
     resolution: vec2f,
     scale: f32,
-    mapSizeTiles: f32,
-    mapSizeChunks: u32,
+    mapSizeTiles: u32,
+    sphereMapScale: f32,
     chunkSize: u32,
+    chunkOffset: vec2i,
     resolutionScale: vec2f,
     perspectiveStrength: f32,
     perspectiveScale: f32,
@@ -61,10 +62,12 @@ fn getTileIdx(pos: vec2f) -> u32
 
     let absPos = vec2u(vec2i(floor(pos)) + u_config.macroOffset);
 
-    let chunkPos = absPos/u_config.chunkSize;
+    var chunkPos = vec2i(vec2i(absPos/u_config.chunkSize)) + u_config.chunkOffset;
+    let mapSizeChunks = u_config.mapSizeTiles/u_config.chunkSize;
+    chunkPos = vec2i(chunkPos.x & i32(mapSizeChunks-1), chunkPos.y & i32(mapSizeChunks-1));
     let tilePos = absPos%u_config.chunkSize;
 
-    let chunkIdx = chunkPos.y*u_config.mapSizeChunks+chunkPos.x;
+    let chunkIdx = u32(chunkPos.y)*mapSizeChunks+u32(chunkPos.x);
 
     let chunkOffset = s_chunkRefMap[chunkIdx];
 
@@ -95,7 +98,6 @@ fn fetchTileNeighborhood(pos: vec2f) -> TileNeighborhood {
     var nb: TileNeighborhood;
     let tilePos = floor(pos);
 
-    // FIX: Calculate absolute world position to determine packing parity
     let absTilePos = vec2i(tilePos) + u_config.macroOffset;
     let mapSizeTiles = u32(u_config.mapSizeTiles);
     let centerIdx = getTileIdx(pos);
@@ -396,7 +398,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let viewVec = (baseWorldPos - viewCenter) * u_config.scale * perspectiveStrength / resolutionScale;
 
     let radialVector = baseWorldPos - viewCenter;
-    let sphereRadius = u_config.mapSizeTiles / 3.0;
+    let sphereRadius = f32(u_config.mapSizeTiles)/2.0;
 
     let p = radialVector / sphereRadius;
     let distSq = dot(p, p);
@@ -412,10 +414,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let phi = atan2(normal_sphere.x, normal_sphere.z);
     let theta = asin(normal_sphere.y);
 
-    let u = (phi / ( 3.14159265));
-    let v = (theta / 3.14159265);
+    let u = normal_sphere.x / (1.0 + normal_sphere.z)*0.5;
+    let v = normal_sphere.y / (1.0 + normal_sphere.z)*0.5;
 
-    baseWorldPos = viewCenter + vec2f(u, v) * u_config.mapSizeTiles;
+    baseWorldPos = viewCenter + vec2f(u, v) * f32(u_config.mapSizeTiles) * u_config.sphereMapScale;
 
     var finalColor = vec4f(0.0);
 
