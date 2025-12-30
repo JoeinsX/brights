@@ -7,8 +7,7 @@ class Window {
 public:
     GLFWwindow* handle = nullptr;
 
-    bool initialize(int width, int height, const char* title,
-                    void* userPointer) {
+    bool initialize(int width, int height, const char* title, void* userPointer) {
         if(!glfwInit()) return false;
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
@@ -21,12 +20,12 @@ public:
         return true;
     }
 
-    void setCallbacks(GLFWframebuffersizefun resize, GLFWcursorposfun cursor,
-                      GLFWmousebuttonfun mouse, GLFWscrollfun scroll) const {
+    void setCallbacks(GLFWframebuffersizefun resize, GLFWcursorposfun cursor, GLFWmousebuttonfun mouse, GLFWscrollfun scroll, GLFWkeyfun key) const {
         glfwSetFramebufferSizeCallback(handle, resize);
         glfwSetCursorPosCallback(handle, cursor);
         glfwSetMouseButtonCallback(handle, mouse);
         glfwSetScrollCallback(handle, scroll);
+        glfwSetKeyCallback(handle, key);
     }
 
     [[nodiscard]] bool shouldClose() const { return glfwWindowShouldClose(handle); }

@@ -5,10 +5,7 @@
 
 class TextureImage {
 public:
-    TextureImage(const std::string& filepath) {
-        data = stbi_load(filepath.c_str(), &width, &height, &channels,
-                         4);
-    }
+    TextureImage(const std::string& filepath) { data = stbi_load(filepath.c_str(), &width, &height, &channels, 4); }
 
     ~TextureImage() {
         if(data) {
@@ -20,8 +17,10 @@ public:
     TextureImage& operator=(const TextureImage&) = delete;
 
     TextureImage(TextureImage&& other) noexcept
-        : data(other.data), width(other.width),
-          height(other.height), channels(other.channels) {
+        : data(other.data)
+        , width(other.width)
+        , height(other.height)
+        , channels(other.channels) {
         other.data = nullptr;
     }
 

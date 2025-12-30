@@ -1,25 +1,21 @@
 #pragma once
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <regex>
+#include <set>
+#include <sstream>
 #include <string>
 #include <vector>
-#include <set>
-#include <fstream>
-#include <sstream>
-#include <filesystem>
-#include <regex>
-#include <iostream>
 
 namespace fs = std::filesystem;
 
 class WGSLPreprocessor {
 public:
-    void addDefine(const std::string& name) {
-        defines.insert(name);
-    }
+    void addDefine(const std::string& name) { defines.insert(name); }
 
-    std::string load(const fs::path& path) {
-        return parseFile(path);
-    }
+    std::string load(const fs::path& path) { return parseFile(path); }
 
 private:
     std::set<std::string> defines;
@@ -27,8 +23,7 @@ private:
     std::string parseFile(const fs::path& path) {
         std::ifstream file(path);
         if(!file.is_open()) {
-            std::cerr << "WGSL Error: Could not open file " << path <<
-                std::endl;
+            std::cerr << "WGSL Error: Could not open file " << path << std::endl;
             return "";
         }
 

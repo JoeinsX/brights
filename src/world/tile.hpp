@@ -31,9 +31,7 @@ struct TileDefinition {
 
 class TileRegistry {
 public:
-    void Register(const TileID id, const int x, const int y, const int variations,
-                  float height = 0.5f,
-                  float softness = 0.5f) {
+    void Register(const TileID id, const int x, const int y, const int variations, float height = 0.5f, float softness = 0.5f) {
         defs[id] = {{x, y}, variations, height, softness};
     }
 

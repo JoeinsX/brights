@@ -383,6 +383,8 @@ fn getTriplanarColor(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32)
 
 const PI = 3.1415926535897932384626433832795;
 
+const simpleModeScaleThreshold = 3.0;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let atlasGridSize = vec2f(16.0, 16.0);
@@ -392,7 +394,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let resolutionScale = u_config.resolutionScale;
     let viewCenter = u_config.offset + (u_config.resolution / u_config.scale) * 0.5;
 
-    let perspectiveStrength = u_config.perspectiveStrength;
+    let simpleModeActive = u_config.scale < 3.0;
+
+    let simpleModeSmoothCoefficient = smoothstep(0.0, 1.0, u_config.scale - simpleModeScaleThreshold);
+
+    let perspectiveStrength = u_config.perspectiveStrength * simpleModeSmoothCoefficient;
     let perspectiveScale = u_config.perspectiveScale;
 
     let viewVec = (baseWorldPos - viewCenter) * u_config.scale * perspectiveStrength / resolutionScale;
@@ -409,21 +415,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     let z = sqrt(1.0 - distSq);
-    let normal_sphere = vec3f(p.x, p.y, z);
+    let sphereNormal = vec3f(p.x, p.y, z);
 
-    let phi = atan2(normal_sphere.x, normal_sphere.z);
-    let theta = asin(normal_sphere.y);
+    let phi = atan2(sphereNormal.x, sphereNormal.z);
+    let theta = asin(sphereNormal.y);
 
-    let u = normal_sphere.x / (1.0 + normal_sphere.z)*0.5;
-    let v = normal_sphere.y / (1.0 + normal_sphere.z)*0.5;
+    let u = sphereNormal.x / (1.0 + sphereNormal.z)*0.5;
+    let v = sphereNormal.y / (1.0 + sphereNormal.z)*0.5;
 
     baseWorldPos = viewCenter + vec2f(u, v) * f32(u_config.mapSizeTiles) * u_config.sphereMapScale;
+
+    let up = vec3f(0.0, 1.0, 0.0);
+    let tangent = normalize(cross(up, sphereNormal + vec3f(0.00001)));
+    let bitangent = cross(sphereNormal, tangent);
+    let tbn = mat3x3f(tangent, bitangent, sphereNormal);
 
     var finalColor = vec4f(0.0);
 
     var rayPos = vec3f(baseWorldPos, 2.0);
 
-    let rayDir = normalize(vec3f(viewVec, -1.0));
+    let rotatedViewVec = normalize(tbn * vec3f(0.0, 0.0, -1.0)) * vec3f(viewVec, 1.0);
+
+    let rayDir1 = normalize(vec3f(viewVec, -1.0));
+
+    let rayDir2 = normalize(mix(rotatedViewVec, vec3f(0.0, 0.0, -1.0), distSq*distSq * 0.2f));
+
+    let rayDir = normalize(mix(rayDir1, rayDir2, distSq/2.0));
 
     let gridStepDir = sign(rayDir.xy);
     let gridBorderOffset = step(vec2f(0.0), gridStepDir);
@@ -432,132 +449,140 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var nh = fetchTileNeighborhood(rayPos.xy);
 
-    for(var i=0; i<10; i+=1)
-    {
-        let tileData = nh.tiles[0];
-        let tileMaxHeight = tileData.height;
-
-        let tileSoftness = tileData.softness;
-
-        var gridBorder = floor(rayPos.xy) + gridBorderOffset;
-
-        var borderDistance = vec3f(gridBorder - rayPos.xy, min(0.0, tileMaxHeight - rayPos.z));
-
-        var borderTime = borderDistance / rayDir;
-
-        var exitTime2 = min(borderTime.x, borderTime.y);
-        var exitTime3 = min(exitTime2, borderTime.z);
-
-        if(borderTime.z <= exitTime2)
+    if (u_config.scale < 3.0) {
+        let h = getSmoothedHeightNeighborhood(rayPos.xy, nh);
+        rayPos.z = h;
+        hit = true;
+    }
+    else {
+        for(var i=0; i<10; i+=1)
         {
-            if(borderTime.z <=0.0 && tileSoftness <= 0.05)
+            let tileData = nh.tiles[0];
+            let tileMaxHeight = tileData.height;
+
+            let tileSoftness = tileData.softness;
+
+            var gridBorder = floor(rayPos.xy) + gridBorderOffset;
+
+            var borderDistance = vec3f(gridBorder - rayPos.xy, min(0.0, tileMaxHeight - rayPos.z));
+
+            var borderTime = borderDistance / rayDir;
+
+            var exitTime2 = min(borderTime.x, borderTime.y);
+            var exitTime3 = min(exitTime2, borderTime.z);
+
+            if(borderTime.z <= exitTime2)
             {
-                hit = true;
-                break;
-            }
-
-            let prevRayPos = rayPos;
-            rayPos += rayDir * (exitTime3 + 0.005);
-
-            //if(floor(prevRayPos).x != floor(rayPos).x || floor(prevRayPos).y != floor(rayPos).y)
-            //{
-                //return vec4f(1.0, 0.0, 0.0, 1.0);
-            //}
-
-            borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
-            borderTime = abs(borderDistance / rayDir);
-
-            exitTime2 = min(borderTime.x, borderTime.y);
-            exitTime3 = min(exitTime2, borderTime.z);
-
-            if(tileSoftness <= 0.05)
-            {
-                hit = true;
-                break;
-            }
-            else
-            {
-                let exitTime = exitTime2 - 0.005;
-                var exitRayPos = rayPos + rayDir * exitTime;
-
-                let enterHeight = getSmoothedHeightNeighborhood(rayPos.xy, nh);
-
-                if(enterHeight>=rayPos.z)
+                if(borderTime.z <=0.0 && tileSoftness <= 0.05)
                 {
                     hit = true;
                     break;
                 }
 
-                let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
+                let prevRayPos = rayPos;
+                rayPos += rayDir * (exitTime3 + 0.005);
 
-                let complexityTag = nh.tiles[0].complexityTag;
+                borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
+                borderTime = abs(borderDistance / rayDir);
 
-                let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(complexityTag));
+                exitTime2 = min(borderTime.x, borderTime.y);
+                exitTime3 = min(exitTime2, borderTime.z);
 
-                let stepSize = exitTime / f32(steps+1);
-                var marchedT = 0.0;
-                var foundHit = false;
-
-                for(var s = 0; s < steps; s++) {
-                    marchedT += stepSize;
-                    let testPos = rayPos + rayDir * marchedT;
-                    let testPosC = clamp(testPos, min(rayPos, exitRayPos), max(rayPos, exitRayPos));
-                    let h = getSmoothedHeightNeighborhood(testPosC.xy, nh);
-
-                    if(testPos.z <= h) {
-                        exitRayPos = testPos;
-                        foundHit = true;
-                        break;
-                    }
-                }
-
-                if(exitHeight < exitRayPos.z && !foundHit) //no intersection
+                if(tileSoftness <= 0.05)
                 {
-                    rayPos += rayDir * (exitTime2 + 0.005);
-                    nh = fetchTileNeighborhood(rayPos.xy);
+                    hit = true;
+                    break;
                 }
                 else
                 {
-                    var currentRayPos = (rayPos+exitRayPos)/2.0;
-                    for(var j=0; j<10; j+=1)
+                    let exitTime = exitTime2 - 0.005;
+                    var exitRayPos = rayPos + rayDir * exitTime;
+
+                    let enterHeight = getSmoothedHeightNeighborhood(rayPos.xy, nh);
+
+                    if(enterHeight>=rayPos.z)
                     {
-                        let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);
-                        let prevCurrentRayPos = currentRayPos;
-                        if(currentRayPos.z > currentHeight)
-                        {
-                            currentRayPos = (currentRayPos + exitRayPos)/2.0;
-                            rayPos = prevCurrentRayPos;
-                        }
-                        else
-                        {
-                            currentRayPos = (rayPos + currentRayPos)/2.0;
-                            exitRayPos = prevCurrentRayPos;
+                        hit = true;
+                        break;
+                    }
+
+                    let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
+
+                    let complexityTag = nh.tiles[0].complexityTag;
+
+                    let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(complexityTag));
+
+                    let stepSize = exitTime / f32(steps+1);
+                    var marchedT = 0.0;
+                    var foundHit = false;
+
+                    for(var s = 0; s < steps; s++) {
+                        marchedT += stepSize;
+                        let testPos = rayPos + rayDir * marchedT;
+                        let testPosC = clamp(testPos, min(rayPos, exitRayPos), max(rayPos, exitRayPos));
+                        let h = getSmoothedHeightNeighborhood(testPosC.xy, nh);
+
+                        if(testPos.z <= h) {
+                            exitRayPos = testPos;
+                            foundHit = true;
+                            break;
                         }
                     }
-                    rayPos = currentRayPos;
-                    hit = true;
-                    break;
+
+                    if(exitHeight < exitRayPos.z && !foundHit) //no intersection
+                    {
+                        rayPos += rayDir * (exitTime2 + 0.005);
+                        nh = fetchTileNeighborhood(rayPos.xy);
+                    }
+                    else
+                    {
+                        var currentRayPos = (rayPos+exitRayPos)/2.0;
+                        for(var j=0; j<10; j+=1)
+                        {
+                            let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);
+                            let prevCurrentRayPos = currentRayPos;
+                            if(currentRayPos.z > currentHeight)
+                            {
+                                currentRayPos = (currentRayPos + exitRayPos)/2.0;
+                                rayPos = prevCurrentRayPos;
+                            }
+                            else
+                            {
+                                currentRayPos = (rayPos + currentRayPos)/2.0;
+                                exitRayPos = prevCurrentRayPos;
+                            }
+                        }
+                        rayPos = currentRayPos;
+                        hit = true;
+                        break;
+                    }
                 }
             }
-        }
-        else {
-            rayPos += rayDir * (exitTime2 + 0.005);
-            nh = fetchTileNeighborhood(rayPos.xy);
+            else {
+                rayPos += rayDir * (exitTime2 + 0.005);
+                nh = fetchTileNeighborhood(rayPos.xy);
+            }
         }
     }
 
     if(hit) {
         let ct = nh.tiles[0].complexityTag;
-        let normal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
-        let albedo = getTriplanarColorNeighborhood(rayPos, normal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
-        let normalColor = vec4f((normal + vec3f(1.0))/2.0, 1.0);
+
+        let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
+
+        let rotatedNormal = normalize(tbn * localNormal);
+
+        let albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+
+        let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
+
         let lightDir = normalize(vec3f(-0.5, -0.8, 1.0));
-        let diff = max(dot(normal, lightDir), 0.0);
+        let diff = max(dot(rotatedNormal, lightDir), 0.0);
         let ambient = 0.4;
         let lighting = min(1.0, ambient + diff);
 
         finalColor = albedo * lighting;
-            //finalColor = normalColor;
+        finalColor = normalColor;
     } else {
         finalColor = vec4f(0.1, 0.1, 0.1, 1.0);
     }

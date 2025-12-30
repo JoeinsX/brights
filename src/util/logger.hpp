@@ -1,17 +1,15 @@
 #pragma once
 
-#include <iostream>
-#include <string_view>
-#include <format>
-#include <chrono>
-#include <source_location>
 #include <atomic>
+#include <chrono>
+#include <format>
+#include <iostream>
+#include <source_location>
+#include <string_view>
 
 class Log {
 public:
-    enum class Level : uint8_t {
-        Trace = 0, Debug, Info, Warn, Error, Critical, Fatal, Off
-    };
+    enum class Level : uint8_t { Trace = 0, Debug, Info, Warn, Error, Critical, Fatal, Off };
 
 private:
     struct LevelConfig {
@@ -53,31 +51,23 @@ public:
     }
 
     template<typename... Args>
-    static void error(std::format_string<Args...> fmt, Args&&... args,
-                      const std::source_location& loc =
-                          std::source_location::current()) {
+    static void error(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
         logImpl<Level::Error>(fmt, std::forward<Args>(args)..., loc);
     }
 
     template<typename... Args>
-    static void critical(std::format_string<Args...> fmt, Args&&... args,
-                         const std::source_location& loc =
-                             std::source_location::current()) {
+    static void critical(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
         LogImpl<Level::Critical>(fmt, std::forward<Args>(args)..., loc);
     }
 
     template<typename... Args>
-    static void fatal(std::format_string<Args...> fmt, Args&&... args,
-                      const std::source_location& loc =
-                          std::source_location::current()) {
+    static void fatal(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
         logImpl<Level::Fatal>(fmt, std::forward<Args>(args)..., loc);
     }
 
 private:
     template<Level L, typename... Args>
-    static void logImpl(std::format_string<Args...> fmt, Args&&... args,
-                        const std::source_location& loc =
-                            std::source_location::current()) {
+    static void logImpl(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
         if(L < s_MinLevel.load()) return;
 
         constexpr LevelConfig Config = getConfig(L);
@@ -87,12 +77,9 @@ private:
         std::string message = std::format(fmt, std::forward<Args>(args)...);
 
         if constexpr(Config.ShowLocation) {
-            std::clog << std::format("[{:%T}] [{}] {} [at {}:{}]\n",
-                                     now, Config.Label, message,
-                                     loc.file_name(), loc.line());
+            std::clog << std::format("[{:%T}] [{}] {} [at {}:{}]\n", now, Config.Label, message, loc.file_name(), loc.line());
         } else {
-            std::clog << std::format("[{:%T}] [{}] {}\n",
-                                     now, Config.Label, message);
+            std::clog << std::format("[{:%T}] [{}] {}\n", now, Config.Label, message);
         }
     }
 };

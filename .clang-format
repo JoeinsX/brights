@@ -22,13 +22,16 @@ BraceWrapping:
   BeforeElse: false
 
 # Line length
-ColumnLimit: 120
+ColumnLimit: 180
+
+# Line Ending:/
+LineEnding: LF
 
 # Pointer alignment
 PointerAlignment: Left
 DerivePointerAlignment: false
 
-# Namespace formatting (modern)
+# Namespace formatting
 NamespaceIndentation: All
 CompactNamespaces: true
 
@@ -73,7 +76,7 @@ IndentCaseBlocks: false
 # Ternary operators
 BreakBeforeTernaryOperators: false
 AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: true
 
@@ -86,7 +89,7 @@ BinPackArguments: true
 PenaltyReturnTypeOnItsOwnLine: 200
 
 # Template formatting
-AlwaysBreakTemplateDeclarations: MultiLine
+AlwaysBreakTemplateDeclarations: Yes
 
 # Alignment
 AlignAfterOpenBracket: Align

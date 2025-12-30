@@ -1,10 +1,11 @@
 #pragma once
+#include <cmath>
 
 class Camera {
 public:
-    void pan(float dx, float dy) {
-        offsetX -= dx / scale;
-        offsetY -= dy / scale;
+    void pan(glm::vec2 dt) {
+        offsetX -= dt.x / scale;
+        offsetY -= dt.y / scale;
     }
 
     void zoom(float scrollOffset, double mouseX, double mouseY, int screenWidth, int screenHeight) {
@@ -15,10 +16,12 @@ public:
         const float mouseWorldY = (static_cast<float>(mouseY) - halfHeight) / scale + offsetY;
 
         static constexpr float zoomFactor = 1.1f;
-        if(scrollOffset > 0) scale *= zoomFactor;
-        else scale /= zoomFactor;
+        if(scrollOffset > 0)
+            scale *= zoomFactor;
+        else
+            scale /= zoomFactor;
 
-        scale = std::clamp(scale, 0.2f, 64.0f);
+        scale = std::clamp(scale, 0.1f, 64.0f);
 
         offsetX = mouseWorldX - (static_cast<float>(mouseX) - halfWidth) / scale;
         offsetY = mouseWorldY - (static_cast<float>(mouseY) - halfHeight) / scale;
