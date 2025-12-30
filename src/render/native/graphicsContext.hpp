@@ -87,7 +87,7 @@ public:
         textureDesc.dimension = wgpu::TextureDimension::_2D;
         textureDesc.format = wgpu::TextureFormat::RGBA8UnormSrgb;
         textureDesc.size = {static_cast<uint32_t>(image.getWidth()), static_cast<uint32_t>(image.getHeight()), 1};
-        textureDesc.mipLevelCount = 8;
+        textureDesc.mipLevelCount = 4;
         textureDesc.sampleCount = 1;
         textureDesc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
 
@@ -104,42 +104,67 @@ public:
         source.rowsPerImage = image.getHeight();
 
         wgpu::Extent3D mipLevelSize = textureDesc.size;
+        wgpu::Extent3D prevMipLevelSize = textureDesc.size;
 
         std::vector<uint8_t> previousLevelPixels;
+
+        auto srgbToLinear = [](uint8_t val) -> float {
+            float v = val / 255.0f;
+            return std::pow(v, 2.2f);
+        };
+
+        auto linearToSrgb = [](float val) -> uint8_t {
+            float v = std::pow(val, 1.0f / 2.2f);
+            if(v > 1.0f) v = 1.0f;
+            if(v < 0.0f) v = 0.0f;
+            return static_cast<uint8_t>(v * 255.0f + 0.5f);
+        };
+
         for(uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
             std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
-            for(uint32_t i = 0; i < mipLevelSize.width; ++i) {
-                for(uint32_t j = 0; j < mipLevelSize.height; ++j) {
+
+            for(uint32_t j = 0; j < mipLevelSize.height; ++j) {
+                for(uint32_t i = 0; i < mipLevelSize.width; ++i) {
                     uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
+
                     if(level == 0) {
-                        p[0] = image.getData()[4 * (j * mipLevelSize.width + i)];
-                        p[1] = image.getData()[4 * (j * mipLevelSize.width + i) + 1];
-                        p[2] = image.getData()[4 * (j * mipLevelSize.width + i) + 2];
-                        p[3] = image.getData()[4 * (j * mipLevelSize.width + i) + 3];
+                        const uint8_t* srcData = image.getData();
+                        p[0] = srcData[4 * (j * mipLevelSize.width + i) + 0];
+                        p[1] = srcData[4 * (j * mipLevelSize.width + i) + 1];
+                        p[2] = srcData[4 * (j * mipLevelSize.width + i) + 2];
+                        p[3] = srcData[4 * (j * mipLevelSize.width + i) + 3];
                     } else {
-                        uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 0))];
-                        uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 1))];
-                        uint8_t* p10 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 0))];
-                        uint8_t* p11 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 1))];
-                        // Average
-                        p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
-                        p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
-                        p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
-                        p[3] = (p00[3] + p01[3] + p10[3] + p11[3]) / 4;
+                        uint32_t prevStride = 4 * prevMipLevelSize.width;
+
+                        uint8_t* p00 = &previousLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 0)];
+                        uint8_t* p01 = &previousLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 1)];
+                        uint8_t* p10 = &previousLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 0)];
+                        uint8_t* p11 = &previousLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 1)];
+
+                        float r = (srgbToLinear(p00[0]) + srgbToLinear(p01[0]) + srgbToLinear(p10[0]) + srgbToLinear(p11[0])) / 4.0f;
+                        float g = (srgbToLinear(p00[1]) + srgbToLinear(p01[1]) + srgbToLinear(p10[1]) + srgbToLinear(p11[1])) / 4.0f;
+                        float b = (srgbToLinear(p00[2]) + srgbToLinear(p01[2]) + srgbToLinear(p10[2]) + srgbToLinear(p11[2])) / 4.0f;
+                        float a = (p00[3] + p01[3] + p10[3] + p11[3]) / 4.0f;
+
+                        p[0] = linearToSrgb(r);
+                        p[1] = linearToSrgb(g);
+                        p[2] = linearToSrgb(b);
+                        p[3] = static_cast<uint8_t>(a);
                     }
                 }
             }
-            destination.mipLevel = level;
 
+            destination.mipLevel = level;
             source.bytesPerRow = 4 * mipLevelSize.width;
             source.rowsPerImage = mipLevelSize.height;
 
             queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
 
-            mipLevelSize.width /= 2;
-            mipLevelSize.height /= 2;
-
+            prevMipLevelSize = mipLevelSize;
             previousLevelPixels = std::move(pixels);
+
+            mipLevelSize.width = std::max(1u, mipLevelSize.width / 2);
+            mipLevelSize.height = std::max(1u, mipLevelSize.height / 2);
         }
 
         wgpu::TextureViewDescriptor viewDesc;

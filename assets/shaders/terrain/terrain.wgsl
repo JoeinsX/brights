@@ -339,6 +339,66 @@ fn getAnalyticalNormalNeighborhood(worldPos: vec2f, nb: TileNeighborhood) -> vec
     return normalize(vec3f(-gradH.x, -gradH.y, 1.0));
 }
 
+fn getBlendedTriplanarColor(
+    worldPos: vec3f,
+    normal: vec3f,
+    perspectiveScale: f32,
+    lod: f32,
+    nh: TileNeighborhood
+) -> vec4f {
+    let atlasGridSize = vec2f(16.0, 16.0);
+
+    var wAxis = pow(abs(normal), vec3f(4.0));
+    wAxis = wAxis / (wAxis.x + wAxis.y + wAxis.z);
+
+    let gridPos = worldPos.xy - 0.5;
+    let baseTile = floor(gridPos);
+    let f = fract(gridPos);
+
+    var offsets = array<vec2f, 4>(
+        vec2f(0.0, 0.0), vec2f(1.0, 0.0),
+        vec2f(0.0, 1.0), vec2f(1.0, 1.0)
+    );
+
+    var totalWeight = 0.0;
+    var finalColor = vec4f(0.0);
+
+    for (var i = 0; i < 4; i++) {
+        let neighborPos = baseTile + offsets[i];
+
+        let ts = getTileData(neighborPos).xy;
+        let tileData = fetchTileData(neighborPos);
+
+        let distToTile = abs(f - offsets[i]);
+        let linearWeight = (1.0 - distToTile.x) * (1.0 - distToTile.y);
+
+        let heightWeight = tileData.height + (tileData.softness * 2.0);
+
+        var w = max(0.0, linearWeight);
+        w = pow(w, 1.0 + (1.0 - tileData.softness) * 2.0);
+        w *= (1.0 + heightWeight * 5.0);
+
+        if (w > 0.001) {
+            let uvZ = fract(worldPos.xy);
+            let uvX = vec2f(fract(worldPos.y), 1.0 - fract(worldPos.z * perspectiveScale));
+            let uvY = vec2f(fract(worldPos.x), 1.0 - fract(worldPos.z * perspectiveScale));
+
+            let id = ts;
+
+            let colZ = textureSampleLevel(t_atlas, s_atlas, (id + uvZ) / atlasGridSize, lod);
+            let colX = textureSampleLevel(t_atlas, s_atlas, (id + uvX) / atlasGridSize, lod);
+            let colY = textureSampleLevel(t_atlas, s_atlas, (id + uvY) / atlasGridSize, lod);
+
+            let triColor = colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z;
+
+            finalColor += triColor * w;
+            totalWeight += w;
+        }
+    }
+
+    return finalColor / max(totalWeight, 0.0001);
+}
+
 fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32, nb: TileNeighborhood) -> vec4f {
     let atlasGridSize = vec2f(16.0, 16.0);
     var w = pow(abs(normal), vec3f(4.0));
@@ -572,7 +632,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         let rotatedNormal = normalize(tbn * localNormal);
 
-        let albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+        let albedo = getBlendedTriplanarColor(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
 
         let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
 
@@ -582,7 +642,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let lighting = min(1.0, ambient + diff);
 
         finalColor = albedo * lighting;
-        finalColor = normalColor;
+        //finalColor = normalColor;
     } else {
         finalColor = vec4f(0.1, 0.1, 0.1, 1.0);
     }
