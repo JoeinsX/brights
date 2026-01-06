@@ -24,15 +24,7 @@ struct Uniforms {
 @group(0) @binding(4) var<storage, read> s_packed: array<u32>;
 @group(0) @binding(5) var<storage, read> s_chunkRefMap: array<u32>;
 
-struct TileData {
-    height: f32,
-    softness: f32,
-    complexityTag: bool
-};
-
-struct TileNeighborhood {
-    tiles: array<TileData, 9> //0 is center, then (+1, +1), then clockwise
-};
+#include "tile.wgsl"
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
@@ -47,104 +39,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     return out;
 }
 
-fn unpackTileData(word: u32, isIdxOdd: bool) -> TileData
-{
-    let val = select(word & 0xFFFFu, word >> 16u, isIdxOdd);
-    let h = f32((val >> 8u) & 0xFFu) / 127.5;
-    let s = f32((val >> 1u) & 0x7Fu) / 127.0;
-    let t = bool(val & 1u);
-    return TileData(h, s, t);
-}
-
-fn getTileIdx(pos: vec2f) -> u32
-{
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
-
-    let absPos = vec2u(vec2i(floor(pos)) + u_config.macroOffset);
-
-    var chunkPos = vec2i(vec2i(absPos/u_config.chunkSize)) + u_config.chunkOffset;
-    let mapSizeChunks = u_config.mapSizeTiles/u_config.chunkSize;
-    chunkPos = vec2i(chunkPos.x & i32(mapSizeChunks-1), chunkPos.y & i32(mapSizeChunks-1));
-    let tilePos = absPos%u_config.chunkSize;
-
-    let chunkIdx = u32(chunkPos.y)*mapSizeChunks+u32(chunkPos.x);
-
-    let chunkOffset = s_chunkRefMap[chunkIdx];
-
-    let idx = chunkOffset + u32(tilePos.y) * u_config.chunkSize + u32(tilePos.x);
-    return idx;
-}
-
-fn fetchTileData(pos: vec2f) -> TileData {
-    let mapSizeTiles = u_config.mapSizeTiles;
-    let idx = getTileIdx(pos);
-
-    // Each u32 contains 2 tiles (16 bits each)
-    let word = s_packed[idx / 2u];
-    return unpackTileData(word, (idx % 2u) == 1u);
-}
-
-fn fetchTwoTiles(pos: vec2f, isFirstTileOdd: bool) -> array<TileData, 2> {
-    let mapSizeTiles = u_config.mapSizeTiles;
-    let idx = getTileIdx(pos);//u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSizeTiles) + u32(i32(pos.x) + u_config.macroOffset.x);
-
-    // Each u32 contains 2 tiles (16 bits each)
-    let word = s_packed[idx / 2u];
-    return array<TileData, 2>(unpackTileData(word, isFirstTileOdd), unpackTileData(word, !isFirstTileOdd));
-}
-
-
-fn fetchTileNeighborhood(pos: vec2f) -> TileNeighborhood {
-    var nb: TileNeighborhood;
-    let tilePos = floor(pos);
-
-    let absTilePos = vec2i(tilePos) + u_config.macroOffset;
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
-    let centerIdx = getTileIdx(pos);
-    let isCenterOdd = (centerIdx % 2u) != 0u;
-
-    if (isCenterOdd) {
-        // If Center is Odd, it shares a word with the tile to its LEFT (Even)
-        // Row Y (Center & Left)
-        let rowY = fetchTwoTiles(tilePos, true);
-        nb.tiles[0] = rowY[0]; // Center (0, 0)
-        nb.tiles[6] = rowY[1]; // L (-1, 0)
-        nb.tiles[2] = fetchTileData(tilePos + vec2f(1.0, 0.0)); // R (1, 0)
-
-        // Row Y-1 (Up & Top-Left)
-        let rowUp = fetchTwoTiles(tilePos + vec2f(0.0, -1.0), true);
-        nb.tiles[4] = rowUp[0]; // U (0, -1)
-        nb.tiles[5] = rowUp[1]; // TL (-1, -1)
-        nb.tiles[3] = fetchTileData(tilePos + vec2f(1.0, -1.0)); // TR (1, -1)
-
-        // Row Y+1 (Down & Bottom-Left)
-        let rowDown = fetchTwoTiles(tilePos + vec2f(0.0, 1.0), true);
-        nb.tiles[8] = rowDown[0]; // D (0, 1)
-        nb.tiles[7] = rowDown[1]; // BL (-1, 1)
-        nb.tiles[1] = fetchTileData(tilePos + vec2f(1.0, 1.0)); // BR (1, 1)
-    } else {
-        // If Center is Even, it shares a word with the tile to its RIGHT (Odd)
-        // Row Y (Center & Right)
-        let rowY = fetchTwoTiles(tilePos, false);
-        nb.tiles[0] = rowY[0]; // Center (0, 0)
-        nb.tiles[2] = rowY[1]; // R (1, 0)
-        nb.tiles[6] = fetchTileData(tilePos + vec2f(-1.0, 0.0)); // L (-1, 0)
-
-        // Row Y-1 (Up & Top-Right)
-        let rowUp = fetchTwoTiles(tilePos + vec2f(0.0, -1.0), false);
-        nb.tiles[4] = rowUp[0]; // U (0, -1)
-        nb.tiles[3] = rowUp[1]; // TR (1, -1)
-        nb.tiles[5] = fetchTileData(tilePos + vec2f(-1.0, -1.0)); // TL (-1, -1)
-
-        // Row Y+1 (Down & Bottom-Right)
-        let rowDown = fetchTwoTiles(tilePos + vec2f(0.0, 1.0), false);
-        nb.tiles[8] = rowDown[0]; // D (0, 1)
-        nb.tiles[1] = rowDown[1]; // BR (1, 1)
-        nb.tiles[7] = fetchTileData(tilePos + vec2f(-1.0, 1.0)); // BL (-1, 1)
-    }
-
-    return nb;
-}
+#include "util.wgsl"
 
 fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     let center = nh.tiles[0];
@@ -213,28 +108,10 @@ fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     return mix(targetH, centerH, profile);
 }
 
-fn getTileData(pos: vec2f) -> vec2f {
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
-
-    let absPos = vec2i(floor(pos)) + u_config.macroOffset;
-
-    if (absPos.x < 0 || absPos.x >= i32(mapSizeTiles) || absPos.y < 0 || absPos.y >= i32(mapSizeTiles)) {
-        return vec2f(-1.0);
-    }
-
-    let idx = getTileIdx(pos);
-
-    let word = s_tilemap[idx / 4u];
-    let shift = (idx % 4u) * 8u;
-    let byte = (word >> shift) & 0xFFu;
-
-    return vec2f(f32(byte >> 4u), f32(byte & 0x0Fu));
-}
-
 fn getTerrainColor(pos: vec2f, lod: f32) -> vec4f {
     let atlasGridSize = vec2f(16.0, 16.0);
 
-    let idTop = getTileData(floor(pos)).xy;
+    let idTop = fetchTileUv(floor(pos)).xy;
 
     let uvTop = fract(pos);
 
@@ -245,101 +122,136 @@ fn getTileBlendWeight(pos: vec2f) -> f32 {
 return pos.x*50+pos.y;
 }
 
-fn getAnalyticalNormalNeighborhood(worldPos: vec2f, nb: TileNeighborhood) -> vec3f {
-    let centerH = nb.tiles[0].height;
-    if (centerH <= 0.01) { return vec3f(0.0, 0.0, 1.0); }
+#include "normal.wgsl"
 
-    let uv = fract(worldPos);
-    let rawSoftness = nb.tiles[0].softness;
-    let isSharp = rawSoftness < 0.001;
-    let detectionSoftness = select(rawSoftness, 0.02, isSharp);
-
-    // Neighbor Mapping based on clockwise indices:
-    // L:6, R:2, U:4, D:8, TL:5, TR:3, BL:7, BR:1
-    let hL = nb.tiles[6].height;
-    let hR = nb.tiles[2].height;
-    let hU = nb.tiles[4].height;
-    let hD = nb.tiles[8].height;
-
-    let edgeDists = vec4f(uv.x, 1.0 - uv.x, uv.y, 1.0 - uv.y);
-    let isLower = vec4f(
-        step(hL, centerH - 0.001),
-        step(hR, centerH - 0.001),
-        step(hU, centerH - 0.001),
-        step(hD, centerH - 0.001)
-    );
-
-    let cuts = max(vec4f(0.0), detectionSoftness - edgeDists) * isLower;
-    let dX = max(cuts.x, cuts.y);
-    let dY = max(cuts.z, cuts.w);
-
-    let hX = select(select(centerH, hR, cuts.y > cuts.x), hL, cuts.x > cuts.y);
-    let hY = select(select(centerH, hD, cuts.w > cuts.z), hU, cuts.z > cuts.w);
-
-    let gradX_dir = select(select(0.0, 1.0, cuts.y > cuts.x), -1.0, cuts.x > cuts.y);
-    let gradY_dir = select(select(0.0, 1.0, cuts.w > cuts.z), -1.0, cuts.z > cuts.w);
-
-    var dist = length(vec2f(dX, dY));
-    var targetH = centerH;
-    var distGradient = vec2f(0.0);
-
-    if (dist > 0.0001) {
-        targetH = (hX * dX + hY * dY) / (dX + dY);
-        distGradient = vec2f(dX * gradX_dir, dY * gradY_dir) / dist;
-    }
-
-    if (nb.tiles[5].height < centerH) {
-        let v = uv - vec2f(0.0);
-        let d = detectionSoftness - length(v);
-        if (d > dist) {
-            dist = d;
-            targetH = nb.tiles[5].height;
-            distGradient = -normalize(v);
-        }
-    }
-
-    if (nb.tiles[3].height < centerH) {
-        let v = uv - vec2f(1.0, 0.0);
-        let d = detectionSoftness - length(v);
-        if (d > dist) {
-            dist = d;
-            targetH = nb.tiles[3].height;
-            distGradient = -normalize(v);
-        }
-    }
-
-    if (nb.tiles[7].height < centerH) {
-        let v = uv - vec2f(0.0, 1.0);
-        let d = detectionSoftness - length(v);
-        if (d > dist) {
-            dist = d;
-            targetH = nb.tiles[7].height;
-            distGradient = -normalize(v);
-        }
-    }
-
-    if (nb.tiles[1].height < centerH) {
-        let v = uv - vec2f(1.0);
-        let d = detectionSoftness - length(v);
-        if (d > dist) {
-            dist = d;
-            targetH = nb.tiles[1].height;
-            distGradient = -normalize(v);
-        }
-    }
-
-    if (dist <= 0.0) { return vec3f(0.0, 0.0, 1.0); }
-    if (isSharp) { return vec3f(distGradient, 0.0); }
-
-    let t = clamp(dist / detectionSoftness, 0.0, 1.0);
-    let dProfile_dt = -6.0 * t * (1.0 - t);
-    let slopeFactor = (centerH - targetH) * dProfile_dt * (1.0 / detectionSoftness);
-    let gradH = distGradient * slopeFactor;
-
-    return normalize(vec3f(-gradH.x, -gradH.y, 1.0));
+fn hash(p: vec2f) -> f32 {
+    return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);
 }
 
-fn getBlendedTriplanarColor(
+fn getBlendedColorNeighborhood(
+    worldPos: vec3f,
+    lod: f32,
+    nh: TileNeighborhood
+) -> vec4f {
+    let atlasGridSize = vec2f(16.0, 16.0);
+
+    let uvZ = fract(worldPos.xy);
+    let gridPos = worldPos.xy - 0.5;
+    let baseTile = floor(gridPos);
+
+    let noiseScale = 1.0; // How fast the wiggle changes
+    let noiseAmp = 0.05;  // How wide the wiggle is
+
+    let warp = vec2f(
+        sin(worldPos.y * noiseScale),
+        cos(worldPos.x * noiseScale)
+    ) * noiseAmp;
+
+    let f = fract(gridPos);
+    //let f = clamp(fract(gridPos) + warp, vec2f(0.0), vec2f(1.0));
+
+    var s_vals: vec4f; // Softness for TL, TR, BL, BR
+    var h_vals: vec4f; // Height for TL, TR, BL, BR
+
+    let is_right = uvZ.x >= 0.5;
+    let is_down  = uvZ.y >= 0.5;
+
+    if (is_right) {
+        if (is_down) {
+            // Quadrant: Bottom-Right
+            s_vals = vec4f(nh.tiles[0].softness, nh.tiles[2].softness, nh.tiles[8].softness, nh.tiles[1].softness);
+            h_vals = vec4f(nh.tiles[0].height,   nh.tiles[2].height,   nh.tiles[8].height,   nh.tiles[1].height);
+        } else {
+            // Quadrant: Top-Right
+            s_vals = vec4f(nh.tiles[4].softness, nh.tiles[3].softness, nh.tiles[0].softness, nh.tiles[2].softness);
+            h_vals = vec4f(nh.tiles[4].height,   nh.tiles[3].height,   nh.tiles[0].height,   nh.tiles[2].height);
+        }
+    } else {
+        if (is_down) {
+            // Quadrant: Bottom-Left
+            s_vals = vec4f(nh.tiles[6].softness, nh.tiles[0].softness, nh.tiles[7].softness, nh.tiles[8].softness);
+            h_vals = vec4f(nh.tiles[6].height,   nh.tiles[0].height,   nh.tiles[7].height,   nh.tiles[8].height);
+        } else {
+            // Quadrant: Top-Left
+            s_vals = vec4f(nh.tiles[5].softness, nh.tiles[4].softness, nh.tiles[6].softness, nh.tiles[0].softness);
+            h_vals = vec4f(nh.tiles[5].height,   nh.tiles[4].height,   nh.tiles[6].height,   nh.tiles[0].height);
+        }
+    }
+
+    let s = max(s_vals, vec4f(0.001));
+
+    let dist_x = vec4f(f.x, 1.0 - f.x, f.x, 1.0 - f.x);
+    let dist_y = vec4f(f.y, f.y, 1.0 - f.y, 1.0 - f.y);
+
+    let axis_x = clamp((0.5 - dist_x) / s + 0.5, vec4f(0.0), vec4f(1.0));
+    let axis_y = clamp((0.5 - dist_y) / s + 0.5, vec4f(0.0), vec4f(1.0));
+
+    var w = (axis_x * axis_y) / s;
+
+    let inv_f = 1.0 - f;
+    let w_spatial = vec4f(
+        inv_f.x * inv_f.y, // TL
+        f.x * inv_f.y,     // TR
+        inv_f.x * f.y,     // BL
+        f.x * f.y          // BR
+    );
+
+    w *= (1.0 + (h_vals + s_vals * 2.0) * 5.0) * w_spatial;
+
+    var totalColor = vec4f(0.0);
+    var totalWeight = 0.0;
+
+    // Tile 0: Top-Left
+    if (w.x > 0.0001) {
+        let ts = fetchTileUv(baseTile).xy; // + vec2(0,0)
+        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.x;
+        totalWeight += w.x;
+    }
+
+    // Tile 1: Top-Right
+    if (w.y > 0.0001) {
+        let ts = fetchTileUv(baseTile + vec2f(1.0, 0.0)).xy;
+        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.y;
+        totalWeight += w.y;
+    }
+
+    // Tile 2: Bottom-Left
+    if (w.z > 0.0001) {
+        let ts = fetchTileUv(baseTile + vec2f(0.0, 1.0)).xy;
+        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.z;
+        totalWeight += w.z;
+    }
+
+    // Tile 3: Bottom-Right
+    if (w.w > 0.0001) {
+        let ts = fetchTileUv(baseTile + vec2f(1.0, 1.0)).xy;
+        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.w;
+        totalWeight += w.w;
+    }
+
+    return totalColor / max(totalWeight, 0.0001);
+}
+
+fn getBlendedTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32, nb: TileNeighborhood) -> vec4f {
+    let atlasGridSize = vec2f(16.0, 16.0);
+    var w = pow(abs(normal), vec3f(4.0));
+    w = w / (w.x + w.y + w.z);
+
+    let tileID = fetchTileUv(floor(pos.xy));
+    if (tileID.x < 0.0) { return vec4f(0.0); }
+
+    let uvZ = fract(pos.xy);
+    let uvX = vec2f(fract(pos.y), 1.0 - fract(pos.z * perspectiveScale));
+    let uvY = vec2f(fract(pos.x), 1.0 - fract(pos.z * perspectiveScale));
+
+    let colZ = getBlendedColorNeighborhood(pos, lod, nb);
+    let colX = textureSampleLevel(t_atlas, s_atlas, (tileID + uvX) / atlasGridSize, lod);
+    let colY = textureSampleLevel(t_atlas, s_atlas, (tileID + uvY) / atlasGridSize, lod);
+
+    return colX * w.x + colY * w.y + colZ * w.z;
+}
+
+fn getBlendedTriplanarColorNeighborhood1(
     worldPos: vec3f,
     normal: vec3f,
     perspectiveScale: f32,
@@ -351,47 +263,118 @@ fn getBlendedTriplanarColor(
     var wAxis = pow(abs(normal), vec3f(4.0));
     wAxis = wAxis / (wAxis.x + wAxis.y + wAxis.z);
 
+    let uvZ = fract(worldPos.xy);
+    let uvX = vec2f(fract(worldPos.y), 1.0 - fract(worldPos.z * perspectiveScale));
+    let uvY = vec2f(fract(worldPos.x), 1.0 - fract(worldPos.z * perspectiveScale));
+
     let gridPos = worldPos.xy - 0.5;
     let baseTile = floor(gridPos);
     let f = fract(gridPos);
 
-    var offsets = array<vec2f, 4>(
-        vec2f(0.0, 0.0), vec2f(1.0, 0.0),
-        vec2f(0.0, 1.0), vec2f(1.0, 1.0)
-    );
+    let uv_center = fract(worldPos.xy);
+    let is_right = uv_center.x >= 0.5;
+    let is_down  = uv_center.y >= 0.5;
+
+    var td0: TileData;
+    var td1: TileData;
+    var td2: TileData;
+    var td3: TileData;
+
+    if (is_right) {
+        if (is_down) {
+            td0 = nh.tiles[0];
+            td1 = nh.tiles[2];
+            td2 = nh.tiles[8];
+            td3 = nh.tiles[1];
+        } else {
+            td0 = nh.tiles[4];
+            td1 = nh.tiles[3];
+            td2 = nh.tiles[0];
+            td3 = nh.tiles[2];
+        }
+    } else {
+        if (is_down) {
+            td0 = nh.tiles[6];
+            td1 = nh.tiles[0];
+            td2 = nh.tiles[7];
+            td3 = nh.tiles[8];
+        } else {
+            td0 = nh.tiles[5];
+            td1 = nh.tiles[4];
+            td2 = nh.tiles[6];
+            td3 = nh.tiles[0];
+        }
+    }
 
     var totalWeight = 0.0;
     var finalColor = vec4f(0.0);
+    {
+        let tileData = td0;
+        let s = max(tileData.softness, 0.001);
+        let axisWeight = clamp((vec2f(0.5) - f) / s + 0.5, vec2f(0.0), vec2f(1.0));
+        var w = axisWeight.x * axisWeight.y * (1.0 / s);
+        w *= (1.0 + (tileData.height + tileData.softness * 2.0) * 5.0);
 
-    for (var i = 0; i < 4; i++) {
-        let neighborPos = baseTile + offsets[i];
+        if (w > 0.0001) {
+            let ts = fetchTileUv(baseTile).xy;
+            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
+            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
+            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            totalWeight += w;
+        }
+    }
 
-        let ts = getTileData(neighborPos).xy;
-        let tileData = fetchTileData(neighborPos);
+    {
+        let tileData = td1;
+        let s = max(tileData.softness, 0.001);
+        let dist = vec2f(1.0 - f.x, f.y);
+        let axisWeight = clamp((vec2f(0.5) - dist) / s + 0.5, vec2f(0.0), vec2f(1.0));
+        var w = axisWeight.x * axisWeight.y * (1.0 / s);
+        w *= (1.0 + (tileData.height + tileData.softness * 2.0) * 5.0);
 
-        let distToTile = abs(f - offsets[i]);
-        let linearWeight = (1.0 - distToTile.x) * (1.0 - distToTile.y);
+        if (w > 0.0001) {
+            let ts = fetchTileUv(baseTile + vec2f(1.0, 0.0)).xy;
+            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
+            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
+            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            totalWeight += w;
+        }
+    }
 
-        let heightWeight = tileData.height + (tileData.softness * 2.0);
+    {
+        let tileData = td2;
+        let s = max(tileData.softness, 0.001);
+        let dist = vec2f(f.x, 1.0 - f.y);
+        let axisWeight = clamp((vec2f(0.5) - dist) / s + 0.5, vec2f(0.0), vec2f(1.0));
+        var w = axisWeight.x * axisWeight.y * (1.0 / s);
+        w *= (1.0 + (tileData.height + tileData.softness * 2.0) * 5.0);
 
-        var w = max(0.0, linearWeight);
-        w = pow(w, 1.0 + (1.0 - tileData.softness) * 2.0);
-        w *= (1.0 + heightWeight * 5.0);
+        if (w > 0.0001) {
+            let ts = fetchTileUv(baseTile + vec2f(0.0, 1.0)).xy;
+            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
+            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
+            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            totalWeight += w;
+        }
+    }
 
-        if (w > 0.001) {
-            let uvZ = fract(worldPos.xy);
-            let uvX = vec2f(fract(worldPos.y), 1.0 - fract(worldPos.z * perspectiveScale));
-            let uvY = vec2f(fract(worldPos.x), 1.0 - fract(worldPos.z * perspectiveScale));
+    {
+        let tileData = td3;
+        let s = max(tileData.softness, 0.001);
+        let dist = vec2f(1.0 - f.x, 1.0 - f.y);
+        let axisWeight = clamp((vec2f(0.5) - dist) / s + 0.5, vec2f(0.0), vec2f(1.0));
+        var w = axisWeight.x * axisWeight.y * (1.0 / s);
+        w *= (1.0 + (tileData.height + tileData.softness * 2.0) * 5.0);
 
-            let id = ts;
-
-            let colZ = textureSampleLevel(t_atlas, s_atlas, (id + uvZ) / atlasGridSize, lod);
-            let colX = textureSampleLevel(t_atlas, s_atlas, (id + uvX) / atlasGridSize, lod);
-            let colY = textureSampleLevel(t_atlas, s_atlas, (id + uvY) / atlasGridSize, lod);
-
-            let triColor = colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z;
-
-            finalColor += triColor * w;
+        if (w > 0.0001) {
+            let ts = fetchTileUv(baseTile + vec2f(1.0, 1.0)).xy;
+            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
+            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
+            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
             totalWeight += w;
         }
     }
@@ -404,7 +387,7 @@ fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f3
     var w = pow(abs(normal), vec3f(4.0));
     w = w / (w.x + w.y + w.z);
 
-    let tileID = getTileData(floor(pos.xy));
+    let tileID = fetchTileUv(floor(pos.xy));
     if (tileID.x < 0.0) { return vec4f(0.0); }
 
     let uvZ = fract(pos.xy);
@@ -414,29 +397,6 @@ fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f3
     let colZ = textureSampleLevel(t_atlas, s_atlas, (tileID + uvZ) / atlasGridSize, lod);
     let colX = textureSampleLevel(t_atlas, s_atlas, (tileID + uvX) / atlasGridSize, lod);
     let colY = textureSampleLevel(t_atlas, s_atlas, (tileID + uvY) / atlasGridSize, lod);
-
-    return colX * w.x + colY * w.y + colZ * w.z;
-}
-
-fn getTriplanarColor(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
-
-    var w = pow(abs(normal), vec3f(4.0));
-    w = w / (w.x + w.y + w.z); // Normalize weights
-
-    let lookupPos = pos - (normal * 0.005);
-    let id = getTileData(floor(lookupPos.xy)).xy;
-
-    if (id.x < 0.0) { return vec4f(0.0); }
-
-    let uvZ = fract(pos.xy);
-
-    let uvX = vec2f(fract(pos.y), 1.0 - fract(pos.z*perspectiveScale));
-    let uvY = vec2f(fract(pos.x), 1.0 - fract(pos.z*perspectiveScale));
-
-    let colZ = textureSampleLevel(t_atlas, s_atlas, (id + uvZ) / atlasGridSize, lod);
-    let colX = textureSampleLevel(t_atlas, s_atlas, (id + uvX) / atlasGridSize, lod);
-    let colY = textureSampleLevel(t_atlas, s_atlas, (id + uvY) / atlasGridSize, lod);
 
     return colX * w.x + colY * w.y + colZ * w.z;
 }
@@ -533,7 +493,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
             if(borderTime.z <= exitTime2)
             {
-                if(borderTime.z <=0.0 && tileSoftness <= 0.05)
+                if(borderTime.z <=0.0 && (tileSoftness <= 0.05 || !tileData.complexityTag))
                 {
                     hit = true;
                     break;
@@ -632,7 +592,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         let rotatedNormal = normalize(tbn * localNormal);
 
-        let albedo = getBlendedTriplanarColor(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+
+        var albedo: vec4f;
+        /*if(ct)
+        {
+            albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+            //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+        }
+        else
+        {
+            //albedo = getBlendedTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+            //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+        }*/
+
+        albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+
 
         let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
 

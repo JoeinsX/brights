@@ -21,7 +21,7 @@ public:
         else
             scale /= zoomFactor;
 
-        scale = std::clamp(scale, 0.1f, 64.0f);
+        scale = std::clamp(scale, 0.1f, 86.0f);
 
         offsetX = mouseWorldX - (static_cast<float>(mouseX) - halfWidth) / scale;
         offsetY = mouseWorldY - (static_cast<float>(mouseY) - halfHeight) / scale;

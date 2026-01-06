@@ -149,7 +149,7 @@ public:
                         }
                     }
                     if(shouldZeroOut) {
-                        softnessMap[index * 2] = 0.0f;
+                        // softnessMap[index * 2] = 0.0f;
                     }
                 }
 
