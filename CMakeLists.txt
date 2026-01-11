@@ -6,6 +6,8 @@ project(
         LANGUAGES CXX C
 )
 
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/bin/deploy" CACHE PATH "Default install prefix" FORCE)
+
 set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
@@ -92,4 +94,13 @@ add_custom_target(CopyAssets
         COMMENT "Copying assets folder to binary directory..."
 )
 
+
 add_dependencies(brights CopyAssets)
+
+install(TARGETS brights RUNTIME DESTINATION .)
+
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets" DESTINATION .)
+
+install(FILES "$<TARGET_FILE_DIR:brights>/wgpu_native.dll"
+        DESTINATION .
+)
