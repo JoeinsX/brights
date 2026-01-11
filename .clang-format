@@ -1,106 +1,208 @@
-# Basic formatting style
+#clang-format 21.1.7
 BasedOnStyle: LLVM
 Language: Cpp
 
-# Indentation
-IndentWidth: 4
-TabWidth: 4
-UseTab: Never
-
-# Braces (K&R style)
-BreakBeforeBraces: Attach
-BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  AfterObjCDeclaration: false
-  AfterStruct: false
-  AfterUnion: false
-  BeforeCatch: false
-  BeforeElse: false
-
-# Line length
-ColumnLimit: 180
-
-# Line Ending:/
-LineEnding: LF
-
-# Pointer alignment
-PointerAlignment: Left
-DerivePointerAlignment: false
-
-# Namespace formatting
-NamespaceIndentation: All
-CompactNamespaces: true
-
-# Access modifiers
-AccessModifierOffset: -4
-
-# Constructor initializer lists
-ConstructorInitializerAllOnOneLineOrOnePerLine: false
-AllowAllConstructorInitializersOnNextLine: false
-ConstructorInitializerIndentWidth: 4
-BreakConstructorInitializers: BeforeComma
-
-# Spacing
-SpaceBeforeParens: Never
-SpacesInAngles: false
-SpacesInCStyleCastParentheses: false
-SpaceAfterCStyleCast: false
-SpaceAfterTemplateKeyword: false
-SpaceBeforeAssignmentOperators: true
-SpaceBeforeCpp11BracedList: false
-
-# Include ordering
-SortIncludes: true
-IncludeBlocks: Regroup
-IncludeCategories:
-  - Regex: '^<.*\.h>'
-    Priority: 1
-  - Regex: '^<.*'
-    Priority: 2
-  - Regex: '^".*'
-    Priority: 3
-IncludeIsMainRegex: '(Test)?$'
-
-# Empty lines
-MaxEmptyLinesToKeep: 1
-KeepEmptyLinesAtTheStartOfBlocks: false
-
-# Switch statements
-IndentCaseLabels: false
-IndentCaseBlocks: false
-
-# Ternary operators
-BreakBeforeTernaryOperators: false
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: true
-AllowShortLoopsOnASingleLine: true
-AllowShortCaseLabelsOnASingleLine: true
-
-# Function declarations/definitions
-AlwaysBreakAfterDefinitionReturnType: None
-AlwaysBreakAfterReturnType: None
-AllowAllParametersOfDeclarationOnNextLine: false
-BinPackParameters: true
-BinPackArguments: true
-PenaltyReturnTypeOnItsOwnLine: 200
-
-# Template formatting
-AlwaysBreakTemplateDeclarations: Yes
-
-# Alignment
+AccessModifierOffset: -3
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignOperands: Align
-AlignTrailingComments: true
+AlignArrayOfStructures: Left
 
-# Continuation lines
-ContinuationIndentWidth: 4
+AlignConsecutiveAssignments: None
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+  AlignCaseColons: false
+AlignEscapedNewlines: LeftWithLastLine
+AlignOperands: AlignAfterOperator
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 2
 
-# Comments
-ReflowComments: true
-SortUsingDeclarations: true
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowBreakBeforeNoexceptSpecifier: Never
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseExpressionOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortCompoundRequirementOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+
+#I am not sure if unbraced if should even exist but let's go
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+#Uhh... it will be braced so that's fine
+AllowShortLambdasOnASingleLine: All
+#the same as AllowShortIfStatementsOnASingleLine
+AllowShortLoopsOnASingleLine: true
+#see no use currently
+AllowShortNamespacesOnASingleLine: false
+AlwaysBreakBeforeMultilineStrings: false
+
+#wow, cool, but unused for now
+AttributeMacros: [ ]
+
+BinPackArguments: true
+#BinPackLongBracedList: true
+BinPackParameters: BinPack
+BitFieldColonSpacing: After
+BracedInitializerIndentWidth: 3
+BreakAdjacentStringLiterals: false
+BreakAfterAttributes: Never
+BreakAfterReturnType: Automatic
+BreakBeforeBinaryOperators: None
+BreakBeforeBraces: Attach
+BreakBeforeConceptDeclarations: Always
+#wow
+BreakBeforeInlineASMColon: Always
+#looks strange but better than before
+BreakBeforeTemplateCloser: true
+BreakBeforeTernaryOperators: false
+BreakBinaryOperations: RespectPrecedence
+BreakConstructorInitializers: AfterColon
+#what a horrifying option
+BreakFunctionDefinitionParameters: false
+BreakInheritanceList: AfterComma
+#uncommon but the idea to strictly keep columnLimit is cool
+BreakStringLiterals: true
+BreakTemplateDeclarations: Yes
+ColumnLimit: 180
+#currently unused
+CommentPragmas: '^ AMOGUS pragma:'
+CompactNamespaces: false
+ConstructorInitializerIndentWidth: 3
+ContinuationIndentWidth: 3
+Cpp11BracedListStyle: true
+#awful, no
+DerivePointerAlignment: false
+#xd
+DisableFormat: false
+EmptyLineAfterAccessModifier: Never
+EnumTrailingComma: Remove
+#"do not use that in config files, etc."
+ExperimentalAutoDetectBinPacking: false
+#why not, let's try
+FixNamespaceComments: true
+ForEachMacros: [ ]
+IfMacros: [ ]
+IncludeBlocks: Regroup
+#just inherit llvm for now
+#IncludeCategories: ...
+#IncludeIsMainRegex: ...
+#IncludeIsMainSourceRegex: ...
+IndentAccessModifiers: false
+IndentCaseBlocks: false
+IndentCaseLabels: false
+IndentExportBlock: true
+IndentExternBlock: AfterExternBlock
+#strange feeling about that. The abyss stares at me...
+IndentGotoLabels: true
+IndentPPDirectives: AfterHash
+IndentRequiresClause: false
+IndentWidth: 3
+IndentWrappedFunctionNames: true
+#hell yeah
+InsertBraces: true
+InsertNewlineAtEOF: true
+#InsertTrailingCommas is unusable for c++
+#looks better without them
+IntegerLiteralSeparator:
+  Binary: -1
+  Decimal: -1
+  Hex: -1
+#here are java & js keys, think they are not needed there eventually
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+  AtStartOfFile: false
+#no I don't need that
+KeepFormFeed: false
+LambdaBodyIndentation: Signature
+LineEnding: LF
+#currently unusable, I hope for no macros
+MacroBlockBegin: ""
+MacroBlockEnd: ""
+Macros: [ ]
+MacrosSkippedByRemoveParentheses: [ ]
+MainIncludeChar: Quote
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: All
+NamespaceMacros: [ ]
+#here are objC keys, think they are not needed there eventually
+#inherit llvm: OneLineFormatOffRegex: ...
+PPIndentWidth: 3
+PackConstructorInitializers: BinPack
+
+#here is some serious thing, leave them equal for now
+PenaltyBreakAssignment: 0
+PenaltyBreakBeforeFirstCallParameter: 0
+PenaltyBreakBeforeMemberAccess: 0
+PenaltyBreakComment: 0
+PenaltyBreakFirstLessLess: 0
+PenaltyBreakOpenParenthesis: 0
+PenaltyBreakScopeResolution: 0
+PenaltyBreakString: 0
+PenaltyBreakTemplateDeclaration: 0
+PenaltyExcessCharacter: 0
+PenaltyIndentedWhitespace: 0
+PenaltyReturnTypeOnItsOwnLine: 0
+
+PointerAlignment: Left
+QualifierAlignment: Left
+RawStringFormats: [ ]
+ReferenceAlignment: Left
+ReflowComments: Always
+RemoveBracesLLVM: false
+#wow, turning this off would end the world
+RemoveEmptyLinesInUnwrappedLines: true
+RemoveParentheses: ReturnStatement
+RemoveSemicolon: true
+RequiresClausePosition: WithPreceding
+RequiresExpressionIndentation: OuterScope
+SeparateDefinitionBlocks: Always
+ShortNamespaceLines: 0
+SkipMacroDefinitionBody: false
+SortIncludes:
+  Enabled: true
+  IgnoreCase: false
+  #SortJavaStaticImport: ...
+SortUsingDeclarations: LexicographicNumeric
+#I hope this won't be used
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterOperatorKeyword: true
+SpaceAfterTemplateKeyword: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: false
+SpaceBeforeInheritanceColon: false
+#SpaceBeforeJsonColon: ...
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpacesBeforeTrailingComments: 3
+SpacesInAngles: Never
+SpacesInContainerLiterals: false
+SpacesInLineCommentPrefix:
+  Maximum: 1
+  Minimum: 1
+SpacesInParens: Never
+SpacesInSquareBrackets: false
+Standard: c++20
+StatementAttributeLikeMacros: [ ]
+StatementMacros: [ ]
+TabWidth: 3
+TemplateNames: [ ]
+TypeNames: [ ]
+TypenameMacros: [ ]
+UseTab: Never
+VariableTemplates: [ ]
+WhitespaceSensitiveMacros: [ ]
+WrapNamespaceBodyWithEmptyLines: Never
+
+

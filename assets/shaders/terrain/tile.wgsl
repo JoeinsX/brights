@@ -1,7 +1,10 @@
-struct TileData {
+ struct TileData {
     height: f32,
     softness: f32,
-    complexityTag: bool
+    skipRaymarching: bool,
+    advancedRaymarching: bool,
+    blending: bool,
+    triplanar: bool
 };
 
 struct TileNeighborhood {
@@ -49,9 +52,10 @@ fn unpackTileData(word: u32, isIdxOdd: bool) -> TileData
 {
     let val = select(word & 0xFFFFu, word >> 16u, isIdxOdd);
     let h = f32((val >> 8u) & 0xFFu) / 127.5;
-    let s = f32((val >> 1u) & 0x7Fu) / 127.0;
-    let t = bool(val & 1u);
-    return TileData(h, s, t);
+    let s = f32((val >> 4u) & 15u) / 15.0;
+    let t = u32(val & 15u);
+    //return TileData(h, s, false, false, false, false);
+    return TileData(h, s, bool(t & 8u), bool(t & 4u), bool(t & 2u), bool(t & 1u));
 }
 
 fn fetchTileData(pos: vec2f) -> TileData {

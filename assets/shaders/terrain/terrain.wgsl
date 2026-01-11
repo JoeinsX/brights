@@ -317,9 +317,9 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile).xy;
-            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
-            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
-            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
+            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
+            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
             finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
             totalWeight += w;
         }
@@ -335,9 +335,9 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(1.0, 0.0)).xy;
-            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
-            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
-            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
+            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
+            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
             finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
             totalWeight += w;
         }
@@ -353,9 +353,9 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(0.0, 1.0)).xy;
-            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
-            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
-            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
+            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
+            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
             finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
             totalWeight += w;
         }
@@ -371,9 +371,9 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(1.0, 1.0)).xy;
-            let colZ = textureSample(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize);
-            let colX = textureSample(t_atlas, s_atlas, (ts + uvX) / atlasGridSize);
-            let colY = textureSample(t_atlas, s_atlas, (ts + uvY) / atlasGridSize);
+            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
+            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
+            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
             finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
             totalWeight += w;
         }
@@ -493,7 +493,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
             if(borderTime.z <= exitTime2)
             {
-                if(borderTime.z <=0.0 && (tileSoftness <= 0.05 || !tileData.complexityTag))
+                if(borderTime.z <=0.0 && (tileSoftness <= 0.05 || tileData.skipRaymarching))
                 {
                     hit = true;
                     break;
@@ -508,7 +508,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 exitTime2 = min(borderTime.x, borderTime.y);
                 exitTime3 = min(exitTime2, borderTime.z);
 
-                if(tileSoftness <= 0.05)
+                if(tileSoftness <= 0.05 || tileData.skipRaymarching)
                 {
                     hit = true;
                     break;
@@ -528,9 +528,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
                     let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
 
-                    let complexityTag = nh.tiles[0].complexityTag;
+                    //let complexityTag = nh.tiles[0].complexityTag;
 
-                    let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(complexityTag));
+                    let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(nh.tiles[0].advancedRaymarching));
 
                     let stepSize = exitTime / f32(steps+1);
                     var marchedT = 0.0;
@@ -586,27 +586,44 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     if(hit) {
-        let ct = nh.tiles[0].complexityTag;
+        let lod = log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0;
 
         let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
 
         let rotatedNormal = normalize(tbn * localNormal);
-
+//log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0
+        let f = fract(rayPos.xy);
 
         var albedo: vec4f;
-        /*if(ct)
+
+        let blending = nh.tiles[0].blending;
+
+        if(nh.tiles[0].triplanar)
         {
-            albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
-            //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+            if(blending)
+            {
+                albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, lod, nh);
+            }
+            else
+            {
+                albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, nh);
+            }
         }
         else
         {
-            //albedo = getBlendedTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
-            //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
-        }*/
+            if(blending)
+            {
+                albedo = getBlendedColorNeighborhood(rayPos, lod, nh);
+            }
+            else
+            {
+                albedo = getTerrainColor(rayPos.xy, lod);
+            }
+        }
 
-        albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
+        //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
 
+        //albedo = getTerrainColor(rayPos.xy, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0);
 
         let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
 
