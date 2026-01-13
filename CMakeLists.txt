@@ -13,9 +13,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 
 add_executable(brights src/main.cpp
-        src/render/wgslPreprocessor.hpp
-        src/render/textureImage.hpp
-        src/render/camera.hpp
+        src/render/core/wgslPreprocessor.hpp
+        src/render/core/textureImage.hpp
+        src/render/core/camera.hpp
         src/world/worldGenerator.hpp
         src/world/chunk.hpp
         src/world/tile.hpp
@@ -23,6 +23,16 @@ add_executable(brights src/main.cpp
         src/platform/window.hpp
         src/util/logger.hpp
         src/world/world.hpp
+        src/util/threadpool.hpp
+        src/render/native/gpuBuffer.hpp
+        src/render/native/gpuTexture.hpp
+        src/render/native/gpuHelpers.hpp
+        src/render/native/gpuContext.hpp
+        src/world/worldRenderAdapter.hpp
+        src/input.hpp
+        src/game.hpp
+        src/application.hpp
+        src/world/chunkMesher.hpp
 )
 
 set_target_properties(brights PROPERTIES
@@ -81,6 +91,8 @@ FetchContent_MakeAvailable(glm)
 
 add_library(stbWrp INTERFACE)
 target_include_directories(stbWrp INTERFACE ${stb_SOURCE_DIR})
+
+target_include_directories(brights PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 
 target_link_libraries(brights PRIVATE webgpu glfw glfw3webgpu FastNoise2 stbWrp glm)
