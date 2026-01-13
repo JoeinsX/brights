@@ -1,4 +1,5 @@
 #pragma once
+
 #include "FastNoise/FastNoise.h"
 #include "chunk.hpp"
 
@@ -10,95 +11,95 @@
 class WorldGenerator {
 private:
    struct NoiseContext {
-      FastNoise::SmartNode<FastNoise::Generator> elevation;
-      FastNoise::SmartNode<FastNoise::Generator> river;
-      FastNoise::SmartNode<FastNoise::Generator> temperature;
-      FastNoise::SmartNode<FastNoise::Generator> moisture;
-      FastNoise::SmartNode<FastNoise::Generator> ore;
-      FastNoise::SmartNode<FastNoise::Generator> trees;
+      FastNoise::SmartNode<> elevation;
+      FastNoise::SmartNode<> river;
+      FastNoise::SmartNode<> temperature;
+      FastNoise::SmartNode<> moisture;
+      FastNoise::SmartNode<> ore;
+      FastNoise::SmartNode<> trees;
 
-      NoiseContext () {
-         auto fnBaseElev = FastNoise::New<FastNoise::FractalRidged> ();
-         fnBaseElev->SetSource (FastNoise::New<FastNoise::Simplex> ());
-         fnBaseElev->SetOctaveCount (5);
-         fnBaseElev->SetGain (0.5f);
-         fnBaseElev->SetLacunarity (2.0f);
+      NoiseContext() {
+         auto fnBaseElev = FastNoise::New<FastNoise::FractalRidged>();
+         fnBaseElev->SetSource(FastNoise::New<FastNoise::Simplex>());
+         fnBaseElev->SetOctaveCount(5);
+         fnBaseElev->SetGain(0.5f);
+         fnBaseElev->SetLacunarity(2.0f);
 
-         auto warpElev = FastNoise::New<FastNoise::DomainWarpGradient> ();
-         warpElev->SetSource (fnBaseElev);
-         warpElev->SetWarpAmplitude (40.0f);
-         warpElev->SetWarpFrequency (0.005f);
+         auto warpElev = FastNoise::New<FastNoise::DomainWarpGradient>();
+         warpElev->SetSource(fnBaseElev);
+         warpElev->SetWarpAmplitude(40.0f);
+         warpElev->SetWarpFrequency(0.005f);
          elevation = warpElev;
 
-         auto fnBaseRiver = FastNoise::New<FastNoise::FractalRidged> ();
-         fnBaseRiver->SetSource (FastNoise::New<FastNoise::Simplex> ());
-         fnBaseRiver->SetOctaveCount (3);
+         auto fnBaseRiver = FastNoise::New<FastNoise::FractalRidged>();
+         fnBaseRiver->SetSource(FastNoise::New<FastNoise::Simplex>());
+         fnBaseRiver->SetOctaveCount(3);
 
-         auto warpRiver = FastNoise::New<FastNoise::DomainWarpGradient> ();
-         warpRiver->SetSource (fnBaseRiver);
-         warpRiver->SetWarpAmplitude (20.0f);
-         warpRiver->SetWarpFrequency (0.005f);
+         auto warpRiver = FastNoise::New<FastNoise::DomainWarpGradient>();
+         warpRiver->SetSource(fnBaseRiver);
+         warpRiver->SetWarpAmplitude(20.0f);
+         warpRiver->SetWarpFrequency(0.005f);
          river = warpRiver;
 
-         auto fnBaseTemp = FastNoise::New<FastNoise::Simplex> ();
+         auto fnBaseTemp = FastNoise::New<FastNoise::Simplex>();
 
-         auto warpTemp = FastNoise::New<FastNoise::DomainWarpGradient> ();
-         warpTemp->SetSource (fnBaseTemp);
-         warpTemp->SetWarpAmplitude (10.0f);
-         warpTemp->SetWarpFrequency (0.01f);
+         auto warpTemp = FastNoise::New<FastNoise::DomainWarpGradient>();
+         warpTemp->SetSource(fnBaseTemp);
+         warpTemp->SetWarpAmplitude(10.0f);
+         warpTemp->SetWarpFrequency(0.01f);
          temperature = warpTemp;
 
-         auto fnBaseMoist = FastNoise::New<FastNoise::FractalFBm> ();
-         fnBaseMoist->SetSource (FastNoise::New<FastNoise::Simplex> ());
+         auto fnBaseMoist = FastNoise::New<FastNoise::FractalFBm>();
+         fnBaseMoist->SetSource(FastNoise::New<FastNoise::Simplex>());
 
-         auto warpMoist = FastNoise::New<FastNoise::DomainWarpGradient> ();
-         warpMoist->SetSource (fnBaseMoist);
-         warpMoist->SetWarpAmplitude (30.0f);
-         warpMoist->SetWarpFrequency (0.005f);
+         auto warpMoist = FastNoise::New<FastNoise::DomainWarpGradient>();
+         warpMoist->SetSource(fnBaseMoist);
+         warpMoist->SetWarpAmplitude(30.0f);
+         warpMoist->SetWarpFrequency(0.005f);
          moisture = warpMoist;
 
-         auto fnBaseOre = FastNoise::New<FastNoise::CellularValue> ();
-         fnBaseOre->SetJitterModifier (1.2f);
+         auto fnBaseOre = FastNoise::New<FastNoise::CellularValue>();
+         fnBaseOre->SetJitterModifier(1.2f);
          ore = fnBaseOre;
 
-         trees = FastNoise::New<FastNoise::White> ();
+         trees = FastNoise::New<FastNoise::White>();
       }
    };
 
-   static const NoiseContext& getContext () {
+   static const NoiseContext& getContext() {
       static NoiseContext ctx;
       return ctx;
    }
 
 public:
-   static void generateDefaultChunk (Chunk& chunk) {
+   static void generateDefaultChunk(Chunk& chunk) {
       for (int y = 0; y < Chunk::SIZE; ++y) {
          for (int x = 0; x < Chunk::SIZE; ++x) {
-            chunk.setTerrain (x, y, TileID::Gravel);
+            chunk.setTerrain(x, y, TileID::Gravel);
          }
       }
    }
 
-   static void generate (Chunk& chunk, int seed) {
-      const auto& ctx = getContext ();
+   static void generate(Chunk& chunk, int seed) {
+      const auto& ctx = getContext();
 
-      glm::ivec2 offset = chunk.pos * Chunk::SIZE;
+      glm::ivec2 offset = chunk.getPos() * Chunk::SIZE;
       int size = Chunk::SIZE;
       int area = size * size;
 
-      static thread_local std::vector<float> elevationMap (area);
-      static thread_local std::vector<float> riverMap (area);
-      static thread_local std::vector<float> tempMap (area);
-      static thread_local std::vector<float> moistureMap (area);
-      static thread_local std::vector<float> oreMap (area);
-      static thread_local std::vector<float> treeMap (area);
+      static thread_local std::vector<float> elevationMap(area);
+      static thread_local std::vector<float> riverMap(area);
+      static thread_local std::vector<float> tempMap(area);
+      static thread_local std::vector<float> moistureMap(area);
+      static thread_local std::vector<float> oreMap(area);
+      static thread_local std::vector<float> treeMap(area);
 
-      ctx.elevation->GenUniformGrid2D (elevationMap.data (), offset.x, offset.y, size, size, 0.004f, seed);
-      ctx.river->GenUniformGrid2D (riverMap.data (), offset.x, offset.y, size, size, 0.005f, seed + 111);
-      ctx.temperature->GenUniformGrid2D (tempMap.data (), offset.x, offset.y, size, size, 0.002f, seed + 1923);
-      ctx.moisture->GenUniformGrid2D (moistureMap.data (), offset.x, offset.y, size, size, 0.003f, seed + 4821);
-      ctx.ore->GenUniformGrid2D (oreMap.data (), offset.x, offset.y, size, size, 0.05f, seed + 9991);
-      ctx.trees->GenUniformGrid2D (treeMap.data (), offset.x, offset.y, size, size, 1.0f, seed + 555);
+      ctx.elevation->GenUniformGrid2D(elevationMap.data(), offset.x, offset.y, size, size, 0.004f, seed);
+      ctx.river->GenUniformGrid2D(riverMap.data(), offset.x, offset.y, size, size, 0.005f, seed + 111);
+      ctx.temperature->GenUniformGrid2D(tempMap.data(), offset.x, offset.y, size, size, 0.002f, seed + 1923);
+      ctx.moisture->GenUniformGrid2D(moistureMap.data(), offset.x, offset.y, size, size, 0.003f, seed + 4821);
+      ctx.ore->GenUniformGrid2D(oreMap.data(), offset.x, offset.y, size, size, 0.05f, seed + 9991);
+      ctx.trees->GenUniformGrid2D(treeMap.data(), offset.x, offset.y, size, size, 1.0f, seed + 555);
 
       for (int y = 0; y < size; ++y) {
          for (int x = 0; x < size; ++x) {
@@ -112,7 +113,7 @@ public:
             float treeRng = treeMap[idx];
 
             float dither = treeRng * 0.05f;
-            TileID terrain = TileID::Water;
+            auto terrain = TileID::Water;
 
             bool isRiver = (h > -0.1f && h < 0.5f) && (r > 0.85f);
 
@@ -198,7 +199,7 @@ public:
                }
             }
 
-            chunk.setTerrain (x, y, terrain);
+            chunk.setTerrain(x, y, terrain);
          }
       }
    }

@@ -31,16 +31,13 @@ struct TileDefinition {
 
 class TileRegistry {
 public:
-   void registerTile (const TileID id, const int x, const int y, const int variations, float height = 0.5f, float softness = 0.5f) {
-      defs[id] = {
-         {x, y},
-         variations, height, softness
-      };
+   void registerTile(const TileID id, const int x, const int y, const int variations, float height = 0.5f, float softness = 0.5f) {
+      defs[id] = {{x, y}, variations, height, softness};
    }
 
-   [[nodiscard]] const TileDefinition* get (const TileID id) const {
-      const auto it = defs.find (id);
-      if (it != defs.end ()) {
+   [[nodiscard]] const TileDefinition* get(const TileID id) const {
+      const auto it = defs.find(id);
+      if (it != defs.end()) {
          return &it->second;
       }
       return nullptr;

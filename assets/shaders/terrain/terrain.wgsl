@@ -528,8 +528,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
                     let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
 
-                    //let complexityTag = nh.tiles[0].complexityTag;
-
                     let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(nh.tiles[0].advancedRaymarching));
 
                     let stepSize = exitTime / f32(steps+1);
@@ -591,7 +589,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
 
         let rotatedNormal = normalize(tbn * localNormal);
-//log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0
+
         let f = fract(rayPos.xy);
 
         var albedo: vec4f;
@@ -621,11 +619,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
         }
 
-        //albedo = getBlendedColorNeighborhood(rayPos, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0, nh);
-
-        //albedo = getTerrainColor(rayPos.xy, log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0);
-
-        let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
+        //let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
 
         let lightDir = normalize(vec3f(-0.5, -0.8, 1.0));
         let diff = max(dot(rotatedNormal, lightDir), 0.0);
@@ -633,7 +627,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let lighting = min(1.0, ambient + diff);
 
         finalColor = albedo * lighting;
-        //finalColor = normalColor;
     } else {
         finalColor = vec4f(0.1, 0.1, 0.1, 1.0);
     }
