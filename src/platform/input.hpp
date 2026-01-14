@@ -12,20 +12,17 @@ public:
       scrollDelta = {0.0f, 0.0f};
    }
 
-   bool isKeyDown(const int key) const {
+   [[nodiscard]] bool isKeyDown(const int key) const {
       const auto it = keyStates.find(key);
       return it != keyStates.end() && it->second;
    }
 
-   bool isDragging() const { return dragging; }
+   [[nodiscard]] bool isDragging() const { return dragging; }
+   [[nodiscard]] glm::vec2 getMousePosition() const { return mousePos; }
+   [[nodiscard]] glm::vec2 getMouseDelta() const { return mouseDelta; }
+   [[nodiscard]] glm::vec2 getScrollDelta() const { return scrollDelta; }
 
-   glm::vec2 getMousePosition() const { return mousePos; }
-
-   glm::vec2 getMouseDelta() const { return mouseDelta; }
-
-   glm::vec2 getScrollDelta() const { return scrollDelta; }
-
-   void onKey(int key, int action) {
+   void onKey(const int key, const int action) {
       if (action == GLFW_PRESS) {
          keyStates[key] = true;
       } else if (action == GLFW_RELEASE) {
@@ -45,7 +42,7 @@ public:
    }
 
    void onCursorPos(double xpos, double ypos) {
-      glm::vec2 currentPos = {static_cast<float>(xpos), static_cast<float>(ypos)};
+      const glm::vec2 currentPos = {static_cast<float>(xpos), static_cast<float>(ypos)};
       mousePos = currentPos;
 
       if (dragging) {

@@ -414,6 +414,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let resolutionScale = u_config.resolutionScale;
     let viewCenter = u_config.offset + (u_config.resolution / u_config.scale) * 0.5;
 
+    let bias = min(0.006 / u_config.scale, 0.005);
+
     let simpleModeActive = u_config.scale < 3.0;
 
     let simpleModeSmoothCoefficient = smoothstep(0.0, 1.0, u_config.scale - simpleModeScaleThreshold);
@@ -500,7 +502,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 }
 
                 let prevRayPos = rayPos;
-                rayPos += rayDir * (exitTime3 + 0.005);
+                rayPos += rayDir * (exitTime3 + bias);
 
                 borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
                 borderTime = abs(borderDistance / rayDir);
@@ -515,7 +517,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 }
                 else
                 {
-                    let exitTime = exitTime2 - 0.005;
+                    let exitTime = exitTime2 - bias;
                     var exitRayPos = rayPos + rayDir * exitTime;
 
                     let enterHeight = getSmoothedHeightNeighborhood(rayPos.xy, nh);
@@ -549,7 +551,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
                     if(exitHeight < exitRayPos.z && !foundHit) //no intersection
                     {
-                        rayPos += rayDir * (exitTime2 + 0.005);
+                        rayPos += rayDir * (exitTime2 + bias);
                         nh = fetchTileNeighborhood(rayPos.xy);
                     }
                     else
@@ -577,7 +579,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 }
             }
             else {
-                rayPos += rayDir * (exitTime2 + 0.005);
+                rayPos += rayDir * (exitTime2 + bias);
                 nh = fetchTileNeighborhood(rayPos.xy);
             }
         }

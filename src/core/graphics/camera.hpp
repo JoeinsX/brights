@@ -1,6 +1,9 @@
 #pragma once
+
 #include <algorithm>
 #include <cmath>
+#include <glm/glm.hpp>
+#include <iostream>
 
 class Camera {
 public:

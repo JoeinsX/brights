@@ -2,7 +2,7 @@
 
 #include "chunk.hpp"
 #include "chunkMesher.hpp"
-#include "render/core/camera.hpp"
+#include "core/graphics/camera.hpp"
 #include "util/threadpool.hpp"
 #include "worldGenerator.hpp"
 #include "worldRenderAdapter.hpp"
@@ -15,14 +15,16 @@
 #include <random>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 
 class World {
 public:
-   explicit World(TileRegistry& registry, std::mt19937 rng, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius, uint32_t unloadingThreshold):
-      threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)), loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry),
-      worldGenerator(worldGenerator), renderAdapter(renderAdapter) {}
+   explicit World(TileRegistry& registry, std::mt19937 /*rng*/, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
+                  uint32_t unloadingThreshold):
+      loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator), renderAdapter(renderAdapter),
+      threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {}
 
-   std::shared_ptr<Chunk> getChunk(int x, int y) const {
+   [[nodiscard]] std::shared_ptr<Chunk> getChunk(int x, int y) const {
       const glm::ivec2 chunkPos{x, y};
       const auto it = chunks.find(chunkPos);
       if (it == chunks.end()) {
@@ -34,14 +36,13 @@ public:
    void update(const Camera& camera, const glm::ivec2& globalChunkMove) {
       processFinishedTasks();
 
-      glm::ivec2 cameraChunkPos = static_cast<glm::ivec2>(camera.getOffset()) / Chunk::SIZE + globalChunkMove;
+      const glm::ivec2 cameraChunkPos = static_cast<glm::ivec2>(camera.getOffset()) / Chunk::SIZE + globalChunkMove;
 
       for (auto it = chunks.begin(); it != chunks.end();) {
-         glm::ivec2 bl = cameraChunkPos - static_cast<int>(loadingRadius + unloadingThreshold);
-         glm::ivec2 ur = cameraChunkPos + static_cast<int>(loadingRadius + unloadingThreshold);
-         glm::ivec2 cp = it->second->getPos();
+         const glm::ivec2 bl = cameraChunkPos - static_cast<int32_t>(loadingRadius + unloadingThreshold);
+         const glm::ivec2 ur = cameraChunkPos + static_cast<int32_t>(loadingRadius + unloadingThreshold);
 
-         if (cp.x < bl.x || cp.x >= ur.x || cp.y < bl.y || cp.y >= ur.y) {
+         if (const glm::ivec2 cp = it->second->getPos(); cp.x < bl.x || cp.x >= ur.x || cp.y < bl.y || cp.y >= ur.y) {
             if (pendingMeshing.contains(cp)) {
                ++it;
                continue;
@@ -52,9 +53,9 @@ public:
          }
       }
 
-      for (int x = -loadingRadius; x < loadingRadius; ++x) {
-         for (int y = -loadingRadius; y < loadingRadius; ++y) {
-            glm::ivec2 chunkPos = glm::ivec2{x, y} + cameraChunkPos;
+      for (int x = -static_cast<int32_t>(loadingRadius); std::cmp_less(x, loadingRadius); ++x) {
+         for (int y = -static_cast<int32_t>(loadingRadius); std::cmp_less(y, loadingRadius); ++y) {
+            const glm::ivec2 chunkPos = glm::ivec2{x, y} + cameraChunkPos;
 
             if (chunks.contains(chunkPos) || pendingGeneration.contains(chunkPos)) {
                continue;
@@ -64,10 +65,10 @@ public:
 
             threadPool.enqueue([this, chunkPos]() {
                auto newChunk = std::make_shared<Chunk>(chunkPos);
-               this->worldGenerator.generate(*newChunk, 0);
+               WorldGenerator::generate(*newChunk, 0);
 
-               std::lock_guard<std::mutex> lock(this->resultsMutex);
-               this->finishedQueue.push({TaskResult::Type::Generated, newChunk});
+               const std::lock_guard<std::mutex> lock(resultsMutex);
+               finishedQueue.push({TaskResult::Type::Generated, newChunk});
             });
          }
       }
@@ -75,7 +76,7 @@ public:
 
 private:
    struct TaskResult {
-      enum class Type {
+      enum class Type : uint8_t {
          Generated,
          Meshed
       } type;
@@ -84,9 +85,9 @@ private:
    };
 
    void processFinishedTasks() {
-      std::lock_guard<std::mutex> lock(resultsMutex);
+      const std::lock_guard<std::mutex> lock(resultsMutex);
       while (!finishedQueue.empty()) {
-         TaskResult result = finishedQueue.front();
+         const TaskResult result = finishedQueue.front();
          finishedQueue.pop();
 
          if (result.type == TaskResult::Type::Generated) {
@@ -104,9 +105,10 @@ private:
                }
             }
          } else {
-            result.chunk->setFlag(Chunk::ChunkState::Enum::Meshed);
-            result.chunk->setFlag(Chunk::ChunkState::Enum::NeedsGpuUpload);
+            result.chunk->setFlag(ChunkState::Meshed);
+            result.chunk->setFlag(ChunkState::NeedsGpuUpload);
             pendingMeshing.erase(result.chunk->getPos());
+            renderAdapter.onChunkDataUpdated(result.chunk->getPos());
          }
       }
    }
@@ -122,7 +124,7 @@ private:
       }
       auto chunk = it->second;
 
-      if (chunk->hasFlag(Chunk::ChunkState::Enum::Meshed)) {
+      if (chunk->hasFlag(ChunkState::Meshed)) {
          return;
       }
 
@@ -145,29 +147,31 @@ private:
 
       pendingMeshing.insert(pos);
 
-      threadPool.enqueue([this, chunk, neighbors]() {
-         std::seed_seq seed{chunk->getPos().x, chunk->getPos().y, 42};
+      static constexpr int32_t chunkSeed = 42;
+
+      threadPool.enqueue([this, chunk, neighbors]() -> void {
+         std::seed_seq seed{chunk->getPos().x, chunk->getPos().y, chunkSeed};
          std::mt19937 localRng(seed);
 
          ChunkMesher::meshChunk(*chunk, this->registry, localRng, neighbors, renderAdapter);
-         renderAdapter.onChunkDataUpdated(chunk->getPos());
 
-         std::lock_guard lock(this->resultsMutex);
+         const std::scoped_lock lock(this->resultsMutex);
          this->finishedQueue.push({TaskResult::Type::Meshed, chunk});
       });
    }
+
+   std::queue<TaskResult> finishedQueue;
+   std::mutex resultsMutex;
 
    std::unordered_map<glm::ivec2, std::shared_ptr<Chunk>> chunks;
    std::unordered_set<glm::ivec2> pendingGeneration;
    std::unordered_set<glm::ivec2> pendingMeshing;
 
-   ThreadPool threadPool;
-   std::queue<TaskResult> finishedQueue;
-   std::mutex resultsMutex;
-
-   int32_t loadingRadius = 0;
+   uint32_t loadingRadius = 0;
    uint32_t unloadingThreshold = 0;
    TileRegistry& registry;
    WorldGenerator& worldGenerator;
    WorldRenderAdapter& renderAdapter;
+
+   ThreadPool threadPool;
 };

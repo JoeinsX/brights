@@ -1,10 +1,10 @@
 #pragma once
 
-#include "input.hpp"
-#include "render/native/graphicsContext.hpp"
-#include "world/world.hpp"
-#include "world/worldGenerator.hpp"
-#include "world/worldRenderAdapter.hpp"
+#include "core/graphics/gameGraphics.hpp"
+#include "core/world/world.hpp"
+#include "core/world/worldGenerator.hpp"
+#include "core/world/worldRenderAdapter.hpp"
+#include "platform/input.hpp"
 
 #include <webgpu/webgpu.hpp>
 
@@ -12,7 +12,7 @@ class Game {
 public:
    Game(): rng(0) {}
 
-   void initialize(GraphicsContext* _graphicsCtx, wgpu::Queue _queue) {
+   void initialize(GameGraphics* _graphicsCtx, wgpu::Queue _queue) {
       graphicsCtx = _graphicsCtx;
       queue = _queue;
 
@@ -20,8 +20,8 @@ public:
 
       worldGenerator = std::make_unique<WorldGenerator>();
       worldRenderAdapter = std::make_unique<WorldRenderAdapter>(
-         queue, graphicsCtx->chunkRefMapBuffer.getBuffer(), graphicsCtx->packedBuffer.getBuffer(), graphicsCtx->tilemapBuffer.getBuffer(), Chunk::COUNT / 2);
-      world = std::make_unique<World>(registry, rng, *worldGenerator, *worldRenderAdapter.get(), Chunk::COUNT / 2, 0);
+         queue, graphicsCtx->getChunkRefMapBuffer().getBuffer(), graphicsCtx->getPackedBuffer().getBuffer(), graphicsCtx->getTilemapBuffer().getBuffer());
+      world = std::make_unique<World>(registry, rng, *worldGenerator, *worldRenderAdapter, Chunk::COUNT / 2, 0);
    }
 
    void update(float deltaTime, const Input& input, glm::ivec2 windowSize) {
@@ -39,13 +39,13 @@ private:
       registry.registerTile(TileID::Grass, 0, 0, 4, 1.0);
       registry.registerTile(TileID::Water, 1, 0, 4, 0.6);
       registry.registerTile(TileID::ColdGrass, 2, 0, 4, 1.0);
-      registry.registerTile(TileID::Stone, 3, 0, 4, 2.0, 0.5);
-      registry.registerTile(TileID::HardStone, 4, 0, 4, 2.0);
-      registry.registerTile(TileID::Gravel, 5, 0, 1, 1.0, 0.5);
+      registry.registerTile(TileID::Stone, 3, 0, 4, 1.8, 0.4);
+      registry.registerTile(TileID::HardStone, 4, 0, 4, 1.8, 0.4);
+      registry.registerTile(TileID::Gravel, 5, 0, 1, 1.0, 0.7);
       registry.registerTile(TileID::HardGravel, 6, 0, 1, 1.0);
       registry.registerTile(TileID::Snow, 5, 1, 4, 1.0, 0.5);
       registry.registerTile(TileID::Ice, 6, 1, 4, 0.8);
-      registry.registerTile(TileID::Planks, 7, 0, 1, 2.0, 0.0);
+      registry.registerTile(TileID::Planks, 7, 0, 1, 1.8, 0.0);
       registry.registerTile(TileID::PlankFloor, 8, 0, 1, 1.0);
       registry.registerTile(TileID::RedOre, 9, 0, 1, 1.6);
       registry.registerTile(TileID::BlueOre, 10, 0, 1, 1.6);
@@ -63,9 +63,7 @@ private:
          camera.pan(movementVector * 10.f);
       }
 
-      // ReSharper disable once CppDFAConstantConditions
       if (input.isDragging()) {
-         // ReSharper disable once CppDFAUnreachableCode
          camera.pan(input.getMouseDelta());
       }
 
@@ -98,16 +96,18 @@ private:
                               .perspectiveStrength = perspectiveStrength,
                               .perspectiveScale = perspectiveStrength / basePerspectiveStrength};
 
-      queue.writeBuffer(graphicsCtx->uniformBuffer.getBuffer(), 0, &uData, sizeof(UniformData));
+      queue.writeBuffer(graphicsCtx->getUniformBuffer().getBuffer(), 0, &uData, sizeof(UniformData));
    }
 
-   GraphicsContext* graphicsCtx = nullptr;
+   GameGraphics* graphicsCtx = nullptr;
    wgpu::Queue queue = nullptr;
 
-   std::unique_ptr<WorldGenerator> worldGenerator;
-   std::unique_ptr<World> world;
-   std::unique_ptr<WorldRenderAdapter> worldRenderAdapter;
    TileRegistry registry;
+
+   std::unique_ptr<WorldGenerator> worldGenerator;
+   std::unique_ptr<WorldRenderAdapter> worldRenderAdapter;
+   std::unique_ptr<World> world;
+
    Camera camera;
    std::mt19937 rng;
 };
