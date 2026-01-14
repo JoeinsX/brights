@@ -3,6 +3,12 @@
 
 class GpuBuffer {
 public:
+   GpuBuffer() = default;
+   GpuBuffer(const GpuBuffer& other) = delete;
+   GpuBuffer(GpuBuffer&& other) noexcept = delete;
+   GpuBuffer& operator =(const GpuBuffer& other) = delete;
+   GpuBuffer& operator =(GpuBuffer&& other) noexcept = delete;
+
    ~GpuBuffer() { destroy(); }
 
    void init(wgpu::Device& device, const uint64_t byteSize, const wgpu::BufferUsageFlags usage, const char* label = nullptr) {

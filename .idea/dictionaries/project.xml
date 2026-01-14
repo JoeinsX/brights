@@ -2,9 +2,11 @@
   <dictionary name="project">
     <words>
       <w>ifndef</w>
+      <w>swapchain</w>
       <w>wgsl</w>
       <w>xoffset</w>
       <w>yoffset</w>
+      <w>ypos</w>
     </words>
   </dictionary>
 </component>

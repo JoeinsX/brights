@@ -1,4 +1,4 @@
-#clang-format 21.1.7
+#llvm 21.1.7
 BasedOnStyle: LLVM
 Language: Cpp
 
@@ -147,7 +147,7 @@ PenaltyBreakString: 0
 PenaltyBreakTemplateDeclaration: 0
 PenaltyExcessCharacter: 100
 PenaltyIndentedWhitespace: 0
-PenaltyReturnTypeOnItsOwnLine: 0
+PenaltyReturnTypeOnItsOwnLine: 90
 
 PointerAlignment: Left
 QualifierAlignment: Left
@@ -161,7 +161,7 @@ RemoveParentheses: ReturnStatement
 RemoveSemicolon: true
 RequiresClausePosition: WithPreceding
 RequiresExpressionIndentation: OuterScope
-SeparateDefinitionBlocks: Always
+SeparateDefinitionBlocks: Leave
 ShortNamespaceLines: 0
 SkipMacroDefinitionBody: false
 SortIncludes:

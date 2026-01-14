@@ -13,26 +13,29 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 
 add_executable(brights src/main.cpp
-        src/render/core/wgslPreprocessor.hpp
-        src/render/core/textureImage.hpp
-        src/render/core/camera.hpp
-        src/world/worldGenerator.hpp
-        src/world/chunk.hpp
-        src/world/tile.hpp
-        src/render/native/graphicsContext.hpp
+        src/render/wgslPreprocessor.hpp
+        src/render/textureImage.hpp
+        src/core/graphics/camera.hpp
+        src/core/world/worldGenerator.hpp
+        src/core/world/chunk.hpp
+        src/core/world/tile.hpp
+        src/render/graphicsContext.hpp
         src/platform/window.hpp
         src/util/logger.hpp
-        src/world/world.hpp
+        src/core/world/world.hpp
         src/util/threadpool.hpp
-        src/render/native/gpuBuffer.hpp
-        src/render/native/gpuTexture.hpp
-        src/render/native/gpuHelpers.hpp
-        src/render/native/gpuContext.hpp
-        src/world/worldRenderAdapter.hpp
-        src/input.hpp
-        src/game.hpp
-        src/application.hpp
-        src/world/chunkMesher.hpp
+        src/render/gpuBuffer.hpp
+        src/render/gpuTexture.hpp
+        src/render/gpuHelpers.hpp
+        src/render/gpuContext.hpp
+        src/core/world/worldRenderAdapter.hpp
+        src/platform/input.hpp
+        src/app/game.hpp
+        src/app/application.hpp
+        src/core/world/chunkMesher.hpp
+        src/core/world/chunkMesher.cpp
+        src/util/bitmask.hpp
+        src/core/graphics/gameGraphics.hpp
 )
 
 set_target_properties(brights PROPERTIES

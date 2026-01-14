@@ -23,7 +23,7 @@ enum class TileID : uint8_t {
 };
 
 struct TileDefinition {
-   glm::ivec2 atlasBase;
+   glm::ivec2 atlasBase{};
    int variationCount = 1;
    float height = 0.5f;
    float softness = 0.5f;

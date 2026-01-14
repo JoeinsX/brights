@@ -1,16 +1,13 @@
 #pragma once
 
+#include "core/graphics/camera.hpp"
 #include "game.hpp"
 #include "glm/gtx/vector_query.hpp"
-#include "input.hpp"
+#include "platform/input.hpp"
 #include "platform/window.hpp"
-#include "render/core/camera.hpp"
-#include "render/core/wgslPreprocessor.hpp"
-#include "render/native/graphicsContext.hpp"
+#include "render/graphicsContext.hpp"
+#include "render/wgslPreprocessor.hpp"
 #include "util/logger.hpp"
-#include "world/chunk.hpp"
-#include "world/tile.hpp"
-#include "world/worldGenerator.hpp"
 
 #include <chrono>
 #include <glm/glm.hpp>
@@ -29,21 +26,13 @@ public:
       }
 
       instance = wgpuCreateInstance(nullptr);
-      context.initialize(instance, window.handle);
-      if (!graphics.initialize(&context)) {
-         Log::fatal("Failed to initialize graphics context");
-         return false;
-      }
+      gpuContext.initialize(instance, window.handle);
+      ctx.initialize(&gpuContext);
+      gameGraphics.initialize(ctx);
 
       window.setCallbacks(onFramebufferResize, onCursorPos, onMouseButton, onScroll, onKey);
 
-      if (!graphics.initializeTexture()) {
-         Log::error("Failed to load texture assets/atlas.png");
-         return false;
-      }
-      graphics.initializePipeline();
-
-      game.initialize(&graphics, context.queue);
+      game.initialize(&gameGraphics, ctx.getQueue());
 
       update(0.0f);
 
@@ -52,7 +41,7 @@ public:
    }
 
    void terminate() {
-      graphics.terminate();
+      gameGraphics.terminate();
       if (instance) {
          instance.release();
       }
@@ -62,14 +51,14 @@ public:
    void mainLoop() {
       input.reset();
 
-      window.pollEvents();
+      Window::pollEvents();
 
       frameCount++;
       auto currentTime = std::chrono::steady_clock::now();
       auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTime).count();
 
       if (elapsedMs >= 1000) {
-         std::string title = "Brights: WebGPU - FPS: " + std::to_string(frameCount);
+         const std::string title = "Brights: WebGPU - FPS: " + std::to_string(frameCount);
          glfwSetWindowTitle(window.handle, title.c_str());
          frameCount = 0;
          lastFpsTime = currentTime;
@@ -77,7 +66,7 @@ public:
 
       update(static_cast<float>(elapsedMs));
 
-      graphics.render(window.handle);
+      gameGraphics.render(ctx, window);
    }
 
    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
@@ -90,11 +79,11 @@ private:
       game.update(dt, input, windowSize);
    }
 
-   static void onFramebufferResize(GLFWwindow* window, int, int) {
+   static void onFramebufferResize(GLFWwindow* window, int /*newWidth*/, int /*newHeight*/) {
       const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
       if (app && app->continuousResize) {
          app->update(0.0f);
-         app->graphics.render(app->window.handle);
+         app->gameGraphics.render(app->ctx, app->window);
       }
    }
 
@@ -105,16 +94,16 @@ private:
       }
    }
 
-   static void onMouseButton(GLFWwindow* window, int button, int action, int mods) {
+   static void onMouseButton(GLFWwindow* window, int button, int action, int /*mods*/) {
       const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      double x, y;
+      double x{}, y{};
       glfwGetCursorPos(window, &x, &y);
       if (app) {
          app->input.onMouseButton(button, action, x, y);
       }
    }
 
-   static void onKey(GLFWwindow* window, int key, int scancode, const int action, int mods) {
+   static void onKey(GLFWwindow* window, int key, int /*scancode*/, const int action, int /*mods*/) {
       auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
       if (app) {
          app->input.onKey(key, action);
@@ -129,8 +118,9 @@ private:
    }
 
    Window window;
-   GpuContext context;
-   GraphicsContext graphics;
+   GpuContext gpuContext;
+   GraphicsContext ctx;
+   GameGraphics gameGraphics;
    wgpu::Instance instance = nullptr;
 
    Input input;

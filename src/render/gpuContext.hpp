@@ -13,8 +13,7 @@ public:
    wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
    wgpu::SurfaceConfiguration surfaceConfig = {};
 
-   uint32_t currentWidth = 0;
-   uint32_t currentHeight = 0;
+   glm::ivec2 currentWindowSize{};
 
    bool initialize(wgpu::Instance instance, GLFWwindow* window) {
       surface = glfwGetWGPUSurface(instance, window);
@@ -31,13 +30,10 @@ public:
       device = adapter.requestDevice(deviceDesc);
       queue = device.getQueue();
 
-      int w, h;
-      glfwGetFramebufferSize(window, &w, &h);
-      currentWidth = static_cast<uint32_t>(w);
-      currentHeight = static_cast<uint32_t>(h);
+      glfwGetFramebufferSize(window, &currentWindowSize.x, &currentWindowSize.y);
 
-      surfaceConfig.width = currentWidth;
-      surfaceConfig.height = currentHeight;
+      surfaceConfig.width = currentWindowSize.x;
+      surfaceConfig.height = currentWindowSize.y;
       surfaceConfig.usage = wgpu::TextureUsage::RenderAttachment;
       surfaceFormat = surface.getPreferredFormat(adapter);
       surfaceConfig.format = surfaceFormat;
@@ -50,19 +46,18 @@ public:
       return true;
    }
 
-   wgpu::TextureView acquireNextRenderTexture(GLFWwindow* window) {
-      int width, height;
-      glfwGetFramebufferSize(window, &width, &height);
+   wgpu::TextureView acquireNextRenderTexture(Window& window) {
+      glm::ivec2 newWindowSize;
+      glfwGetFramebufferSize(window.handle, &newWindowSize.x, &newWindowSize.y);
 
-      if (width == 0 || height == 0) {
+      if (newWindowSize.x == 0 || newWindowSize.y == 0) {
          return nullptr;
       }
 
-      if (width != static_cast<int>(currentWidth) || height != static_cast<int>(currentHeight)) {
-         currentWidth = width;
-         currentHeight = height;
-         surfaceConfig.width = currentWidth;
-         surfaceConfig.height = currentHeight;
+      if (newWindowSize != currentWindowSize) {
+         currentWindowSize = newWindowSize;
+         surfaceConfig.width = newWindowSize.x;
+         surfaceConfig.height = newWindowSize.y;
          surface.configure(surfaceConfig);
       }
 

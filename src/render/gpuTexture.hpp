@@ -1,12 +1,18 @@
 #pragma once
 
-#include "render/core/textureImage.hpp"
+#include "textureImage.hpp"
 
 #include <algorithm>
 #include <webgpu/webgpu.hpp>
 
 class GpuTexture {
 public:
+   GpuTexture() = default;
+   GpuTexture(const GpuTexture& other) = delete;
+   GpuTexture(GpuTexture&& other) noexcept = delete;
+   GpuTexture& operator =(const GpuTexture& other) = delete;
+   GpuTexture& operator =(GpuTexture&& other) noexcept = delete;
+
    ~GpuTexture() { destroy(); }
 
    bool load(wgpu::Device& device, wgpu::Queue& queue, const std::string& path) {
@@ -87,7 +93,7 @@ private:
       wgpu::Extent3D prevMipLevelSize = textureDesc.size;
       std::vector<uint8_t> prevLevelPixels;
 
-      auto srgbToLinear = [](const uint8_t val) -> float { return std::pow(val / 255.0f, 2.2f); };
+      auto srgbToLinear = [](const uint8_t val) -> float { return std::pow(static_cast<float>(val) / 255.0f, 2.2f); };
       auto linearToSrgb = [](const float val) -> uint8_t {
          const float v = std::pow(val, 1.0f / 2.2f);
          return static_cast<uint8_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f);
@@ -102,23 +108,23 @@ private:
 
                if (level == 0) {
                   const uint8_t* srcData = image.getData();
-                  size_t srcIdx = 4 * (j * mipLevelSize.width + i);
+                  const size_t srcIdx = 4 * (j * mipLevelSize.width + i);
                   p[0] = srcData[srcIdx + 0];
                   p[1] = srcData[srcIdx + 1];
                   p[2] = srcData[srcIdx + 2];
                   p[3] = srcData[srcIdx + 3];
                } else {
-                  uint32_t prevStride = 4 * prevMipLevelSize.width;
+                  const uint32_t prevStride = 4 * prevMipLevelSize.width;
                   // Sampling 2x2 block from previous level
-                  uint8_t* p00 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 0)];
-                  uint8_t* p01 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 1)];
-                  uint8_t* p10 = &prevLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 0)];
-                  uint8_t* p11 = &prevLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 1)];
+                  const uint8_t* p00 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 0)];
+                  const uint8_t* p01 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 1)];
+                  const uint8_t* p10 = &prevLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 0)];
+                  const uint8_t* p11 = &prevLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 1)];
 
-                  float r = (srgbToLinear(p00[0]) + srgbToLinear(p01[0]) + srgbToLinear(p10[0]) + srgbToLinear(p11[0])) / 4.0f;
-                  float g = (srgbToLinear(p00[1]) + srgbToLinear(p01[1]) + srgbToLinear(p10[1]) + srgbToLinear(p11[1])) / 4.0f;
-                  float b = (srgbToLinear(p00[2]) + srgbToLinear(p01[2]) + srgbToLinear(p10[2]) + srgbToLinear(p11[2])) / 4.0f;
-                  float a = (p00[3] + p01[3] + p10[3] + p11[3]) / 4.0f;
+                  const float r = (srgbToLinear(p00[0]) + srgbToLinear(p01[0]) + srgbToLinear(p10[0]) + srgbToLinear(p11[0])) / 4.0f;
+                  const float g = (srgbToLinear(p00[1]) + srgbToLinear(p01[1]) + srgbToLinear(p10[1]) + srgbToLinear(p11[1])) / 4.0f;
+                  const float b = (srgbToLinear(p00[2]) + srgbToLinear(p01[2]) + srgbToLinear(p10[2]) + srgbToLinear(p11[2])) / 4.0f;
+                  const float a = (static_cast<float>(p00[3] + p01[3] + p10[3] + p11[3])) / 4.0f;
 
                   p[0] = linearToSrgb(r);
                   p[1] = linearToSrgb(g);
@@ -142,7 +148,6 @@ private:
       }
    }
 
-private:
    wgpu::Texture texture = nullptr;
    wgpu::TextureView view = nullptr;
    wgpu::Sampler sampler = nullptr;

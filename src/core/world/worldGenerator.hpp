@@ -87,12 +87,12 @@ public:
       int size = Chunk::SIZE;
       int area = size * size;
 
-      static thread_local std::vector<float> elevationMap(area);
-      static thread_local std::vector<float> riverMap(area);
-      static thread_local std::vector<float> tempMap(area);
-      static thread_local std::vector<float> moistureMap(area);
-      static thread_local std::vector<float> oreMap(area);
-      static thread_local std::vector<float> treeMap(area);
+      thread_local std::vector<float> elevationMap(area);
+      thread_local std::vector<float> riverMap(area);
+      thread_local std::vector<float> tempMap(area);
+      thread_local std::vector<float> moistureMap(area);
+      thread_local std::vector<float> oreMap(area);
+      thread_local std::vector<float> treeMap(area);
 
       ctx.elevation->GenUniformGrid2D(elevationMap.data(), offset.x, offset.y, size, size, 0.004f, seed);
       ctx.river->GenUniformGrid2D(riverMap.data(), offset.x, offset.y, size, size, 0.005f, seed + 111);
@@ -103,7 +103,7 @@ public:
 
       for (int y = 0; y < size; ++y) {
          for (int x = 0; x < size; ++x) {
-            int idx = y * size + x;
+            const int idx = y * size + x;
 
             float h = elevationMap[idx];
             float t = tempMap[idx];
