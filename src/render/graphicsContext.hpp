@@ -18,7 +18,12 @@ public:
          return false;
       }
 
-      currentEncoder = gpu->device.createCommandEncoder({});
+      currentDepthTextureView = gpu->getDepthTextureView();
+      if (!currentDepthTextureView) {
+         return false;
+      }
+
+      currentEncoder = gpu->getDevice().createCommandEncoder({});
       return true;
    }
 
@@ -33,6 +38,22 @@ public:
       renderPassDesc.colorAttachmentCount = 1;
       renderPassDesc.colorAttachments = &attachment;
 
+      wgpu::RenderPassDepthStencilAttachment depthStencilAttachment;
+
+      depthStencilAttachment.view = currentDepthTextureView;
+
+      depthStencilAttachment.depthClearValue = 1.0f;
+      depthStencilAttachment.depthLoadOp = wgpu::LoadOp::Clear;
+      depthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
+      depthStencilAttachment.depthReadOnly = false;
+
+      depthStencilAttachment.stencilClearValue = 0;
+      depthStencilAttachment.stencilLoadOp = wgpu::LoadOp::Clear;
+      depthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Store;
+      depthStencilAttachment.stencilReadOnly = true;
+
+      renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+
       return currentEncoder.beginRenderPass(renderPassDesc);
    }
 
@@ -41,19 +62,20 @@ public:
          currentTextureView.release();
          currentTextureView = nullptr;
       }
+      currentDepthTextureView = nullptr;
 
       wgpu::CommandBuffer command = currentEncoder.finish({});
       currentEncoder.release();
 
-      gpu->queue.submit(1, &command);
+      gpu->getQueue().submit(1, &command);
       gpu->present();
 
       command.release();
    }
 
-   [[nodiscard]] wgpu::Device getDevice() const { return gpu->device; }
-   [[nodiscard]] wgpu::Queue getQueue() const { return gpu->queue; }
-   [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->surfaceFormat; }
+   [[nodiscard]] wgpu::Device getDevice() const { return gpu->getDevice(); }
+   [[nodiscard]] wgpu::Queue getQueue() const { return gpu->getQueue(); }
+   [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->getSurfaceFormat(); }
 
    static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath) {
       const WGSLPreprocessor preprocessor;
@@ -72,4 +94,5 @@ private:
    GpuContext* gpu = nullptr;
    wgpu::CommandEncoder currentEncoder = nullptr;
    wgpu::TextureView currentTextureView = nullptr;
+   wgpu::TextureView currentDepthTextureView = nullptr;
 };

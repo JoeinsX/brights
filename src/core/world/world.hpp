@@ -19,10 +19,10 @@
 
 class World {
 public:
-   explicit World(TileRegistry& registry, std::mt19937 /*rng*/, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
+   explicit World(ThreadPool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
                   uint32_t unloadingThreshold):
-      loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator), renderAdapter(renderAdapter),
-      threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {}
+      threadPool(threadPool), loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator),
+      renderAdapter(renderAdapter) {}
 
    [[nodiscard]] std::shared_ptr<Chunk> getChunk(int x, int y) const {
       const glm::ivec2 chunkPos{x, y};
@@ -65,7 +65,7 @@ public:
 
             threadPool.enqueue([this, chunkPos]() {
                auto newChunk = std::make_shared<Chunk>(chunkPos);
-               WorldGenerator::generate(*newChunk, 0);
+               worldGenerator.generate(*newChunk);
 
                const std::lock_guard<std::mutex> lock(resultsMutex);
                finishedQueue.push({TaskResult::Type::Generated, newChunk});
@@ -169,9 +169,8 @@ private:
 
    uint32_t loadingRadius = 0;
    uint32_t unloadingThreshold = 0;
+   ThreadPool& threadPool;
    TileRegistry& registry;
    WorldGenerator& worldGenerator;
    WorldRenderAdapter& renderAdapter;
-
-   ThreadPool threadPool;
 };

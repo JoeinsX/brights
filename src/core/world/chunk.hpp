@@ -18,7 +18,7 @@ class Chunk {
    friend class ChunkMesher;
 
 public:
-   static constexpr int SIZE = 256;
+   static constexpr int SIZE = 32;
    static constexpr int SIZE_SQUARED = SIZE * SIZE;
    static constexpr int COUNT = 32;
    static constexpr int COUNT_SQUARED = COUNT * COUNT;

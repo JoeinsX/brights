@@ -8,8 +8,8 @@
 
 class WorldRenderAdapter {
 public:
-   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer chunkOffsetBuffer, const wgpu::Buffer chunkDataBuffer, const wgpu::Buffer tilemapBuffer):
-      queue(queue), chunkOffsetBuffer(chunkOffsetBuffer), chunkDataBuffer(chunkDataBuffer), tilemapBuffer(tilemapBuffer) {
+   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer chunkDataBuffer, const wgpu::Buffer tilemapBuffer):
+      queue(queue), chunkDataBuffer(chunkDataBuffer), tilemapBuffer(tilemapBuffer) {
       displayChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
       packedChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
    }
@@ -50,7 +50,6 @@ private:
    }
 
    wgpu::Queue queue = nullptr;
-   wgpu::Buffer chunkOffsetBuffer = nullptr;
    wgpu::Buffer chunkDataBuffer = nullptr;
    wgpu::Buffer tilemapBuffer = nullptr;
    std::vector<uint16_t> packedChunkMaps;

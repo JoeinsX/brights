@@ -32,11 +32,14 @@ public:
 
       window.setCallbacks(onFramebufferResize, onCursorPos, onMouseButton, onScroll, onKey);
 
-      game.initialize(&gameGraphics, ctx.getQueue());
+      game.initialize(&gameGraphics, gpuContext, ctx.getQueue());
 
       update(0.0f);
 
-      lastFpsTime = std::chrono::steady_clock::now();
+      auto now = std::chrono::steady_clock::now();
+      lastFrameTime = now;
+      lastFpsTime = now;
+
       return true;
    }
 
@@ -55,18 +58,23 @@ public:
 
       frameCount++;
       auto currentTime = std::chrono::steady_clock::now();
-      auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTime).count();
 
-      if (elapsedMs >= 1000) {
+      const std::chrono::duration<float, std::milli> frameDuration = currentTime - lastFrameTime;
+      const float dtMs = frameDuration.count();
+      lastFrameTime = currentTime;
+
+      auto elapsedFpsMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTime).count();
+
+      if (elapsedFpsMs >= 1000) {
          const std::string title = "Brights: WebGPU - FPS: " + std::to_string(frameCount);
          glfwSetWindowTitle(window.handle, title.c_str());
          frameCount = 0;
          lastFpsTime = currentTime;
       }
 
-      update(static_cast<float>(elapsedMs));
+      update(dtMs);
 
-      gameGraphics.render(ctx, window);
+      gameGraphics.render(ctx, window, game.getPlanets());
    }
 
    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
@@ -83,7 +91,7 @@ private:
       const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
       if (app && app->continuousResize) {
          app->update(0.0f);
-         app->gameGraphics.render(app->ctx, app->window);
+         app->gameGraphics.render(app->ctx, app->window, app->game.getPlanets());
       }
    }
 
@@ -127,6 +135,8 @@ private:
    Game game;
 
    bool continuousResize = false;
+
+   std::chrono::steady_clock::time_point lastFrameTime;
    std::chrono::steady_clock::time_point lastFpsTime;
    int frameCount = 0;
 };

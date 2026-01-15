@@ -1,3 +1,4 @@
+/*** assets/shaders/terrain/terrain.wgsl ***/
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) uv: vec2f,
@@ -6,15 +7,15 @@ struct VertexOutput {
 struct Uniforms {
     macroOffset: vec2i,
     offset: vec2f,
+    centerOffset: vec2f,
     resolution: vec2f,
     scale: f32,
-    mapSizeTiles: u32,
     sphereMapScale: f32,
-    chunkSize: u32,
     chunkOffset: vec2i,
     resolutionScale: vec2f,
     perspectiveStrength: f32,
     perspectiveScale: f32,
+    planetRadius: f32,
 };
 
 @group(0) @binding(0) var<uniform> u_config: Uniforms;
@@ -35,7 +36,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var p = pos[in_vertex_index];
     var out: VertexOutput;
     out.position = vec4f(p, 0.0, 1.0);
-    out.uv = vec2f(p.x * 0.5 + 0.5, 1.0 - (p.y * 0.5 + 0.5));
+    out.uv = vec2f(p.x * 0.5 + 0.5, 1.0 - (p.y * 0.5 + 0.5)) + u_config.centerOffset;
     return out;
 }
 
@@ -405,14 +406,21 @@ const PI = 3.1415926535897932384626433832795;
 
 const simpleModeScaleThreshold = 3.0;
 
+struct FragmentOutput {
+    @location(0) color: vec4f,
+    @builtin(frag_depth) depth: f32,
+};
+
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+fn fs_main(in: VertexOutput) -> FragmentOutput  {
+    var res: FragmentOutput;
+
     let atlasGridSize = vec2f(16.0, 16.0);
 
     let screenPos = in.uv * u_config.resolution;
     var baseWorldPos = (screenPos / u_config.scale) + u_config.offset;
     let resolutionScale = u_config.resolutionScale;
-    let viewCenter = u_config.offset + (u_config.resolution / u_config.scale) * 0.5;
+    let viewCenter = u_config.offset;
 
     let bias = min(0.006 / u_config.scale, 0.005);
 
@@ -426,7 +434,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let viewVec = (baseWorldPos - viewCenter) * u_config.scale * perspectiveStrength / resolutionScale;
 
     let radialVector = baseWorldPos - viewCenter;
-    let sphereRadius = f32(u_config.mapSizeTiles)/2.0;
+    let sphereRadius = u_config.planetRadius;
 
     let p = radialVector / sphereRadius;
     let distSq = dot(p, p);
@@ -445,7 +453,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let u = sphereNormal.x / (1.0 + sphereNormal.z)*0.5;
     let v = sphereNormal.y / (1.0 + sphereNormal.z)*0.5;
 
-    baseWorldPos = viewCenter + vec2f(u, v) * f32(u_config.mapSizeTiles) * u_config.sphereMapScale;
+    baseWorldPos = viewCenter + vec2f(u, v) * f32(1024) * u_config.sphereMapScale;
 
     let up = vec3f(0.0, 1.0, 0.0);
     let tangent = normalize(cross(up, sphereNormal + vec3f(0.00001)));
@@ -586,6 +594,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     if(hit) {
+        // Reconstruct the final hit position using sphere normal and fragment position
+        //let hitPos = sphereNormal * (sphereRadius + rayPos.z);
+        // Fill the fragment depth based on the reconstructed position Z
+        res.depth = 1.0-sphereNormal.z;//rayPos.z/2.0;
+
         let lod = log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0;
 
         let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
@@ -621,8 +634,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             }
         }
 
-        //let normalColor = vec4f((rotatedNormal + vec3f(1.0))/2.0, 1.0);
-
         let lightDir = normalize(vec3f(-0.5, -0.8, 1.0));
         let diff = max(dot(rotatedNormal, lightDir), 0.0);
         let ambient = 0.4;
@@ -633,5 +644,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         finalColor = vec4f(0.1, 0.1, 0.1, 1.0);
     }
 
-    return finalColor;
+    res.color = finalColor;
+    //return finalColor;
+
+    return res;
 }

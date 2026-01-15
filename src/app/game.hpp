@@ -4,35 +4,59 @@
 #include "core/world/world.hpp"
 #include "core/world/worldGenerator.hpp"
 #include "core/world/worldRenderAdapter.hpp"
+#include "core/world/worldView.hpp"
 #include "platform/input.hpp"
 
+#include <cmath>
 #include <webgpu/webgpu.hpp>
 
 class Game {
 public:
-   Game(): rng(0) {}
+   Game(): threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {
+      static constexpr uint32_t galaxySeed = 0;
+      rng = std::mt19937{galaxySeed};
+   }
 
-   void initialize(GameGraphics* _graphicsCtx, wgpu::Queue _queue) {
+   void initialize(GameGraphics* _graphicsCtx, GpuContext& gpuContext, wgpu::Queue _queue) {
       graphicsCtx = _graphicsCtx;
       queue = _queue;
 
       initializeGameContent();
 
-      worldGenerator = std::make_unique<WorldGenerator>();
-      worldRenderAdapter = std::make_unique<WorldRenderAdapter>(
-         queue, graphicsCtx->getChunkRefMapBuffer().getBuffer(), graphicsCtx->getPackedBuffer().getBuffer(), graphicsCtx->getTilemapBuffer().getBuffer());
-      world = std::make_unique<World>(registry, rng, *worldGenerator, *worldRenderAdapter, Chunk::COUNT / 2, 0);
+      const wgpu::Device device = gpuContext.getDevice();
+
+      auto p1 = std::
+         make_unique<Planet>(PlanetConfig{.position = {-1200.0f, 0.0f}, .seed = 42, .baseSize = 512.0f, .idleScrollSpeed = {100.0f, 50.0f}, .orbitParams = {1000.0f, 0.2f}},
+                             registry);
+      p1->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      planets.push_back(std::move(p1));
+
+      auto p2 = std::make_unique<Planet>(PlanetConfig{.position = {0.0f, 0.0f}, .seed = 1337, .baseSize = 1024.0f, .idleScrollSpeed = {-28.0f, 0.0f}}, registry);
+      p2->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      planets.push_back(std::move(p2));
+
+      auto p3 = std::
+         make_unique<Planet>(PlanetConfig{.position = {1200.0f, 0.0f}, .seed = 2550, .baseSize = 300.0f, .idleScrollSpeed = {/*13.33f, -24.13f*/}, .orbitParams = {1500.0f, -0.4f}},
+                             registry);
+      p3->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      planets.push_back(std::move(p3));
    }
 
-   void update(float deltaTime, const Input& input, glm::ivec2 windowSize) {
-      processInput(input, windowSize);
+   void update(float dt, const Input& input, glm::ivec2 windowSize) {
+      worldView.handleInput(input, planets, windowSize);
 
-      static glm::ivec2 globalChunkMove{};
-      world->update(camera, globalChunkMove);
-      worldRenderAdapter->update(camera, globalChunkMove);
+      for (auto& planet : planets) {
+         planet->update(dt);
+      }
 
-      updateUniforms(windowSize, globalChunkMove);
+      worldView.update(dt, planets, windowSize);
+
+      for (auto& planet : planets) {
+         planet->preRender(worldView.getCamera(), windowSize);
+      }
    }
+
+   [[nodiscard]] const std::vector<std::unique_ptr<Planet>>& getPlanets() const { return planets; }
 
 private:
    void initializeGameContent() {
@@ -54,60 +78,15 @@ private:
       registry.registerTile(TileID::Sand, 12, 0, 4, 0.8);
    }
 
-   void processInput(const Input& input, const glm::ivec2 windowSize) {
-      glm::vec2 movementVector = glm::vec2(static_cast<float>(input.isKeyDown(GLFW_KEY_A)) - static_cast<float>(input.isKeyDown(GLFW_KEY_D)),
-                                           static_cast<float>(input.isKeyDown(GLFW_KEY_W)) - static_cast<float>(input.isKeyDown(GLFW_KEY_S)));
-
-      if (glm::length(movementVector) > 0.1f) {
-         movementVector = glm::normalize(movementVector);
-         camera.pan(movementVector * 10.f);
-      }
-
-      if (input.isDragging()) {
-         camera.pan(input.getMouseDelta());
-      }
-
-      if (input.getScrollDelta().y != 0.0f) {
-         camera.zoom(input.getScrollDelta().y, input.getMousePosition(), windowSize);
-      }
-   }
-
-   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& globalChunkMove) {
-      static constexpr float baseResolutionX = 640.f;
-      static constexpr float baseResolutionY = 480.f;
-      static constexpr float basePerspectiveStrength = 0.002f;
-      static constexpr float perspectiveStrength = 0.002f;
-
-      const glm::vec2 halfScreenWorld = static_cast<glm::vec2>(windowSize) * 0.5f / camera.getScale();
-
-      const glm::vec2 shaderOffset = camera.getOffset() - halfScreenWorld;
-
-      const auto macroOffset = static_cast<glm::ivec2>(glm::floor(shaderOffset));
-
-      const UniformData uData{.macroOffset = macroOffset,
-                              .offset = shaderOffset - static_cast<glm::vec2>(macroOffset),
-                              .res = static_cast<glm::vec2>(windowSize),
-                              .scale = camera.getScale(),
-                              .mapSize = static_cast<uint32_t>(Chunk::SIZE) * Chunk::COUNT,
-                              .sphereMapScale = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT),
-                              .chunkSize = Chunk::SIZE,
-                              .chunkOffset = globalChunkMove,
-                              .resScale = static_cast<glm::vec2>(windowSize) / glm::vec2{baseResolutionX, baseResolutionY},
-                              .perspectiveStrength = perspectiveStrength,
-                              .perspectiveScale = perspectiveStrength / basePerspectiveStrength};
-
-      queue.writeBuffer(graphicsCtx->getUniformBuffer().getBuffer(), 0, &uData, sizeof(UniformData));
-   }
+   std::vector<std::unique_ptr<Planet>> planets;
 
    GameGraphics* graphicsCtx = nullptr;
    wgpu::Queue queue = nullptr;
 
+   ThreadPool threadPool;
+
    TileRegistry registry;
-
-   std::unique_ptr<WorldGenerator> worldGenerator;
-   std::unique_ptr<WorldRenderAdapter> worldRenderAdapter;
-   std::unique_ptr<World> world;
-
-   Camera camera;
    std::mt19937 rng;
+
+   WorldView worldView;
 };
