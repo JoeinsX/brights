@@ -36,6 +36,8 @@ add_executable(brights src/main.cpp
         src/core/world/chunkMesher.cpp
         src/util/bitmask.hpp
         src/core/graphics/gameGraphics.hpp
+        src/core/world/planet.hpp
+        src/core/world/worldView.hpp
 )
 
 set_target_properties(brights PROPERTIES

@@ -137,8 +137,8 @@ PackConstructorInitializers: BinPack
 
 #here is some serious thing, leave them equal for now
 PenaltyBreakAssignment: 0
-PenaltyBreakBeforeFirstCallParameter: 0
-PenaltyBreakBeforeMemberAccess: 0
+PenaltyBreakBeforeFirstCallParameter: 70
+PenaltyBreakBeforeMemberAccess: 80
 PenaltyBreakComment: 0
 PenaltyBreakFirstLessLess: 0
 PenaltyBreakOpenParenthesis: 0

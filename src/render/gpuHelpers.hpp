@@ -11,9 +11,9 @@ namespace WGPUHelpers {
       return entry;
    }
 
-   inline wgpu::BindGroupLayoutEntry
-      textureEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility, const wgpu::TextureSampleType sampleType = wgpu::TextureSampleType::Float,
-                   const wgpu::TextureViewDimension viewDimension = wgpu::TextureViewDimension::_2D) {
+   inline wgpu::BindGroupLayoutEntry textureEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility,
+                                                  const wgpu::TextureSampleType sampleType = wgpu::TextureSampleType::Float,
+                                                  const wgpu::TextureViewDimension viewDimension = wgpu::TextureViewDimension::_2D) {
       wgpu::BindGroupLayoutEntry entry = {};
       entry.binding = binding;
       entry.visibility = visibility;
@@ -22,8 +22,8 @@ namespace WGPUHelpers {
       return entry;
    }
 
-   inline wgpu::BindGroupLayoutEntry
-      samplerEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility, const wgpu::SamplerBindingType type = wgpu::SamplerBindingType::Filtering) {
+   inline wgpu::BindGroupLayoutEntry samplerEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility,
+                                                  const wgpu::SamplerBindingType type = wgpu::SamplerBindingType::Filtering) {
       wgpu::BindGroupLayoutEntry entry = {};
       entry.binding = binding;
       entry.visibility = visibility;

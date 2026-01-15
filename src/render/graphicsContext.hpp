@@ -13,12 +13,19 @@ public:
    void initialize(GpuContext* context) { gpu = context; }
 
    [[nodiscard]] bool beginFrame(Window& window) {
+      // acquiring the render texture triggers the resize logic in GpuContext if needed
       currentTextureView = gpu->acquireNextRenderTexture(window);
       if (!currentTextureView) {
          return false;
       }
 
-      currentEncoder = gpu->device.createCommandEncoder({});
+      // Now we just retrieve the already resized depth view
+      currentDepthTextureView = gpu->getDepthTextureView();
+      if (!currentDepthTextureView) {
+         return false;
+      }
+
+      currentEncoder = gpu->getDevice().createCommandEncoder({});
       return true;
    }
 
@@ -33,6 +40,27 @@ public:
       renderPassDesc.colorAttachmentCount = 1;
       renderPassDesc.colorAttachments = &attachment;
 
+      wgpu::RenderPassDepthStencilAttachment depthStencilAttachment;
+
+      // Use the view managed by GpuContext
+      depthStencilAttachment.view = currentDepthTextureView;
+
+      // The initial value of the depth buffer, meaning "far"
+      depthStencilAttachment.depthClearValue = 1.0f;
+      // Operation settings comparable to the color attachment
+      depthStencilAttachment.depthLoadOp = wgpu::LoadOp::Clear;
+      depthStencilAttachment.depthStoreOp = wgpu::StoreOp::Store;
+      // we could turn off writing to the depth buffer globally here
+      depthStencilAttachment.depthReadOnly = false;
+
+      // Stencil setup, mandatory but unused
+      depthStencilAttachment.stencilClearValue = 0;
+      depthStencilAttachment.stencilLoadOp = wgpu::LoadOp::Clear;
+      depthStencilAttachment.stencilStoreOp = wgpu::StoreOp::Store;
+      depthStencilAttachment.stencilReadOnly = true;
+
+      renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+
       return currentEncoder.beginRenderPass(renderPassDesc);
    }
 
@@ -41,19 +69,21 @@ public:
          currentTextureView.release();
          currentTextureView = nullptr;
       }
+      // Depth view is owned by GpuContext now, we just null our reference
+      currentDepthTextureView = nullptr;
 
       wgpu::CommandBuffer command = currentEncoder.finish({});
       currentEncoder.release();
 
-      gpu->queue.submit(1, &command);
+      gpu->getQueue().submit(1, &command);
       gpu->present();
 
       command.release();
    }
 
-   [[nodiscard]] wgpu::Device getDevice() const { return gpu->device; }
-   [[nodiscard]] wgpu::Queue getQueue() const { return gpu->queue; }
-   [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->surfaceFormat; }
+   [[nodiscard]] wgpu::Device getDevice() const { return gpu->getDevice(); }
+   [[nodiscard]] wgpu::Queue getQueue() const { return gpu->getQueue(); }
+   [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->getSurfaceFormat(); }
 
    static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath) {
       const WGSLPreprocessor preprocessor;
@@ -72,4 +102,5 @@ private:
    GpuContext* gpu = nullptr;
    wgpu::CommandEncoder currentEncoder = nullptr;
    wgpu::TextureView currentTextureView = nullptr;
+   wgpu::TextureView currentDepthTextureView = nullptr;
 };

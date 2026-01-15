@@ -12,7 +12,7 @@ struct TileNeighborhood {
 };
 
 fn fetchTileUv(pos: vec2f) -> vec2f {
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
+    let mapSizeTiles = u32(1024);
 
     let absPos = vec2i(floor(pos)) + u_config.macroOffset;
 
@@ -31,20 +31,20 @@ fn fetchTileUv(pos: vec2f) -> vec2f {
 
 fn getTileIdx(pos: vec2f) -> u32
 {
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
+    let mapSizeTiles = u32(1024);
 
     let absPos = vec2u(vec2i(floor(pos)) + u_config.macroOffset);
 
-    var chunkPos = vec2i(vec2i(absPos/u_config.chunkSize)) + u_config.chunkOffset;
-    let mapSizeChunks = u_config.mapSizeTiles/u_config.chunkSize;
+    var chunkPos = vec2i(vec2i(absPos/32)) + u_config.chunkOffset;
+    let mapSizeChunks = 1024u/32u;
     chunkPos = vec2i(chunkPos.x & i32(mapSizeChunks-1), chunkPos.y & i32(mapSizeChunks-1));
-    let tilePos = absPos%u_config.chunkSize;
+    let tilePos = absPos%32;
 
     let chunkIdx = u32(chunkPos.y)*mapSizeChunks+u32(chunkPos.x);
 
-    let chunkOffset = chunkIdx * u_config.chunkSize * u_config.chunkSize;//todo decide what to do with s_chunkRefMap[chunkIdx];
+    let chunkOffset = chunkIdx * 32 * 32;//todo decide what to do with s_chunkRefMap[chunkIdx];
 
-    let idx = chunkOffset + u32(tilePos.y) * u_config.chunkSize + u32(tilePos.x);
+    let idx = chunkOffset + u32(tilePos.y) * 32u + u32(tilePos.x);
     return idx;
 }
 
@@ -59,7 +59,7 @@ fn unpackTileData(word: u32, isIdxOdd: bool) -> TileData
 }
 
 fn fetchTileData(pos: vec2f) -> TileData {
-    let mapSizeTiles = u_config.mapSizeTiles;
+    let mapSizeTiles = 1024;
     let idx = getTileIdx(pos);
 
     // Each u32 contains 2 tiles (16 bits each)
@@ -68,7 +68,7 @@ fn fetchTileData(pos: vec2f) -> TileData {
 }
 
 fn fetchTwoTiles(pos: vec2f, isFirstTileOdd: bool) -> array<TileData, 2> {
-    let mapSizeTiles = u_config.mapSizeTiles;
+    let mapSizeTiles = 1024;
     let idx = getTileIdx(pos);//u32(i32(pos.y) + u_config.macroOffset.y) * u32(mapSizeTiles) + u32(i32(pos.x) + u_config.macroOffset.x);
 
     // Each u32 contains 2 tiles (16 bits each)
@@ -82,7 +82,7 @@ fn fetchTileNeighborhood(pos: vec2f) -> TileNeighborhood {
     let tilePos = floor(pos);
 
     let absTilePos = vec2i(tilePos) + u_config.macroOffset;
-    let mapSizeTiles = u32(u_config.mapSizeTiles);
+    let mapSizeTiles = u32(1024);
     let centerIdx = getTileIdx(pos);
     let isCenterOdd = (centerIdx % 2u) != 0u;
 

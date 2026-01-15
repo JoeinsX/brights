@@ -72,6 +72,8 @@ private:
    }
 
 public:
+   WorldGenerator(uint64_t seed): seed(seed) {}
+
    static void generateDefaultChunk(Chunk& chunk) {
       for (int y = 0; y < Chunk::SIZE; ++y) {
          for (int x = 0; x < Chunk::SIZE; ++x) {
@@ -80,7 +82,7 @@ public:
       }
    }
 
-   static void generate(Chunk& chunk, int seed) {
+   void generate(Chunk& chunk) {
       const auto& ctx = getContext();
 
       glm::ivec2 offset = chunk.getPos() * Chunk::SIZE;
@@ -203,4 +205,7 @@ public:
          }
       }
    }
+
+private:
+   uint64_t seed{};
 };

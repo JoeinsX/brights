@@ -3,18 +3,11 @@
 #include "GLFW/glfw3.h"
 
 #include <glfw3webgpu.h>
+#include <queue>
 #include <webgpu/webgpu.hpp>
 
 class GpuContext {
 public:
-   wgpu::Device device = nullptr;
-   wgpu::Queue queue = nullptr;
-   wgpu::Surface surface = nullptr;
-   wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
-   wgpu::SurfaceConfiguration surfaceConfig = {};
-
-   glm::ivec2 currentWindowSize{};
-
    bool initialize(wgpu::Instance instance, GLFWwindow* window) {
       surface = glfwGetWGPUSurface(instance, window);
 
@@ -26,7 +19,7 @@ public:
          return false;
       }
 
-      wgpu::DeviceDescriptor deviceDesc = {};
+      const wgpu::DeviceDescriptor deviceDesc = {};
       device = adapter.requestDevice(deviceDesc);
       queue = device.getQueue();
 
@@ -41,6 +34,9 @@ public:
       surfaceConfig.presentMode = wgpu::PresentMode::Fifo;
       surfaceConfig.alphaMode = wgpu::CompositeAlphaMode::Auto;
       surface.configure(surfaceConfig);
+
+      // Initialize depth texture
+      createDepthTexture(currentWindowSize);
 
       adapter.release();
       return true;
@@ -59,6 +55,9 @@ public:
          surfaceConfig.width = newWindowSize.x;
          surfaceConfig.height = newWindowSize.y;
          surface.configure(surfaceConfig);
+
+         // Resize depth texture when window resizes
+         createDepthTexture(currentWindowSize);
       }
 
       wgpu::SurfaceTexture surfaceTexture;
@@ -77,9 +76,18 @@ public:
       return wgpuTextureCreateView(surfaceTexture.texture, &viewDesc);
    }
 
+   [[nodiscard]] wgpu::TextureView getDepthTextureView() const { return depthTextureView; }
+
    void present() { surface.present(); }
 
    void terminate() {
+      if (depthTextureView) {
+         depthTextureView.release();
+      }
+      if (depthTexture) {
+         depthTexture.destroy();
+         depthTexture.release();
+      }
       if (surface) {
          surface.unconfigure();
          surface.release();
@@ -91,4 +99,53 @@ public:
          device.release();
       }
    }
+
+   wgpu::Device& getDevice() { return device; }
+   wgpu::Queue& getQueue() { return queue; }
+   wgpu::TextureFormat& getSurfaceFormat() { return surfaceFormat; }
+
+private:
+   void createDepthTexture(const glm::ivec2& size) {
+      if (depthTexture) {
+         depthTexture.destroy();
+         depthTexture.release();
+      }
+      if (depthTextureView) {
+         depthTextureView.release();
+      }
+
+      wgpu::TextureDescriptor depthTextureDesc;
+      depthTextureDesc.dimension = wgpu::TextureDimension::_2D;
+      depthTextureDesc.format = wgpu::TextureFormat::Depth24Plus;
+      depthTextureDesc.mipLevelCount = 1;
+      depthTextureDesc.sampleCount = 1;
+      depthTextureDesc.size = {static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y), 1};
+      depthTextureDesc.usage = wgpu::TextureUsage::RenderAttachment;
+      depthTextureDesc.viewFormatCount = 1;
+      depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureDesc.format;
+
+      depthTexture = device.createTexture(depthTextureDesc);
+
+      wgpu::TextureViewDescriptor depthTextureViewDesc;
+      depthTextureViewDesc.aspect = wgpu::TextureAspect::DepthOnly;
+      depthTextureViewDesc.baseArrayLayer = 0;
+      depthTextureViewDesc.arrayLayerCount = 1;
+      depthTextureViewDesc.baseMipLevel = 0;
+      depthTextureViewDesc.mipLevelCount = 1;
+      depthTextureViewDesc.dimension = wgpu::TextureViewDimension::_2D;
+      depthTextureViewDesc.format = wgpu::TextureFormat::Depth24Plus;
+
+      depthTextureView = depthTexture.createView(depthTextureViewDesc);
+   }
+
+   wgpu::Device device = nullptr;
+   wgpu::Queue queue = nullptr;
+   wgpu::Surface surface = nullptr;
+   wgpu::TextureFormat surfaceFormat = wgpu::TextureFormat::Undefined;
+   wgpu::SurfaceConfiguration surfaceConfig = {};
+
+   wgpu::Texture depthTexture = nullptr;
+   wgpu::TextureView depthTextureView = nullptr;
+
+   glm::ivec2 currentWindowSize{};
 };
