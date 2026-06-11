@@ -45,11 +45,12 @@ public:
    void update(float dt, const Input& input, glm::ivec2 windowSize) {
       worldView.handleInput(input, planets, windowSize);
 
-      for (auto& planet : planets) {
-         planet->update(dt);
+      const int focusedIndex = worldView.getFocusedPlanetIndex();
+      for (size_t i = 0; i < planets.size(); ++i) {
+         planets[i]->update(dt, static_cast<int>(i) == focusedIndex);
       }
 
-      worldView.update(dt, planets, windowSize);
+      worldView.update(dt, planets);
 
       for (auto& planet : planets) {
          planet->preRender(worldView.getCamera(), windowSize);

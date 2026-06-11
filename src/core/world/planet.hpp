@@ -83,7 +83,7 @@ public:
       renderData.bindGroup = device.createBindGroup(bgDesc);
    }
 
-   void update(float dt) {
+   void update(float dt, bool focused) {
       const float dtSec = dt / 1000.0f;
 
       if (std::abs(config.orbitParams.x) > 0.001f) {
@@ -92,7 +92,7 @@ public:
          config.position.y = std::sin(currentOrbitAngle) * config.orbitParams.x;
       }
 
-      if (glm::length(config.idleScrollSpeed) > 0.0001f) {
+      if (!focused && glm::length(config.idleScrollSpeed) > 0.0001f) {
          localCamera.setOffset(localCamera.getOffset() + config.idleScrollSpeed / 100.f);
       }
 
