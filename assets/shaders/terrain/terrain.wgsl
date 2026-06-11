@@ -2,6 +2,7 @@
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) uv: vec2f,
+    @location(1) screenUv: vec2f,
 };
 
 struct Uniforms {
@@ -36,7 +37,8 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     var p = pos[in_vertex_index];
     var out: VertexOutput;
     out.position = vec4f(p, 0.0, 1.0);
-    out.uv = vec2f(p.x * 0.5 + 0.5, 1.0 - (p.y * 0.5 + 0.5)) + u_config.centerOffset;
+    out.screenUv = vec2f(p.x * 0.5 + 0.5, 1.0 - (p.y * 0.5 + 0.5));
+    out.uv = out.screenUv + u_config.centerOffset;
     return out;
 }
 
@@ -406,6 +408,8 @@ const PI = 3.1415926535897932384626433832795;
 
 const simpleModeScaleThreshold = 3.0;
 
+const maxViewLean = 1.0;
+
 struct FragmentOutput {
     @location(0) color: vec4f,
     @builtin(frag_depth) depth: f32,
@@ -431,7 +435,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
     let perspectiveStrength = u_config.perspectiveStrength * simpleModeSmoothCoefficient;
     let perspectiveScale = u_config.perspectiveScale;
 
-    let viewVec = (baseWorldPos - viewCenter) * u_config.scale * perspectiveStrength / resolutionScale;
+    var viewVec = (in.screenUv - vec2f(0.5)) * u_config.resolution * perspectiveStrength / resolutionScale;
+    viewVec *= min(1.0, maxViewLean / max(length(viewVec), 0.00001));
 
     let radialVector = baseWorldPos - viewCenter;
     let sphereRadius = u_config.planetRadius;
