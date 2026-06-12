@@ -5,7 +5,7 @@
 
 class ThreadPool {
 public:
-   explicit ThreadPool(const size_t threads): stop(false) {
+   explicit ThreadPool(const size_t threads): {
       for (size_t i = 0; i < threads; ++i) {
          workers.emplace_back([this] {
             for (;;) {
@@ -28,7 +28,7 @@ public:
    template<class F>
    void enqueue(F&& f) {
       {
-         std::unique_lock<std::mutex> lock(queue_mutex);
+         const std::unique_lock<std::mutex> lock(queue_mutex);
          tasks.emplace(std::forward<F>(f));
       }
       condition.notify_one();
@@ -36,7 +36,7 @@ public:
 
    ~ThreadPool() {
       {
-         std::unique_lock<std::mutex> lock(queue_mutex);
+         const std::unique_lock<std::mutex> lock(queue_mutex);
          stop = true;
       }
       condition.notify_all();
@@ -50,5 +50,5 @@ private:
    std::queue<std::function<void()>> tasks;
    std::mutex queue_mutex;
    std::condition_variable condition;
-   bool stop;
+   bool stop{false};
 };

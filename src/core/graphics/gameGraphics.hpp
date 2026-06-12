@@ -126,7 +126,7 @@ private:
       depthStencilState.depthCompare = wgpu::CompareFunction::Less;
       depthStencilState.depthWriteEnabled = true;
 
-      wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+      const wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
       depthStencilState.format = depthTextureFormat;
 
       depthStencilState.stencilReadMask = 0;

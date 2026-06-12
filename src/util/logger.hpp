@@ -46,17 +46,17 @@ public:
 
    template<typename... Args>
    static void trace(std::format_string<Args...> fmt, Args&&... args) {
-      LogImpl<Level::Trace>(fmt, std::forward<Args>(args)...);
+      logImpl<Level::Trace>(fmt, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
    static void info(std::format_string<Args...> fmt, Args&&... args) {
-      LogImpl<Level::Info>(fmt, std::forward<Args>(args)...);
+      logImpl<Level::Info>(fmt, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
    static void warn(std::format_string<Args...> fmt, Args&&... args) {
-      LogImpl<Level::Warn>(fmt, std::forward<Args>(args)...);
+      logImpl<Level::Warn>(fmt, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
