@@ -52,8 +52,9 @@ public:
 
       worldView.update(dt, planets);
 
-      for (auto& planet : planets) {
-         planet->preRender(worldView.getCamera(), windowSize);
+      for (size_t i = 0; i < planets.size(); ++i) {
+         const float depth = static_cast<float>(i + 1) / static_cast<float>(planets.size() + 1);
+         planets[i]->preRender(worldView.getCamera(), windowSize, depth);
       }
    }
 

@@ -23,7 +23,8 @@ struct UniformData {
    float perspectiveStrength;
    float perspectiveScale;
    float planetRadius;
-   glm::vec3 _pad;
+   float planetDepth;
+   glm::vec2 _pad;
 };
 
 struct PlanetConfig {
@@ -100,7 +101,7 @@ public:
       adapter->update(localCamera, chunkMove);
    }
 
-   void preRender(Camera& globalCamera, glm::ivec2 windowSize) { updateUniforms(windowSize, chunkMove, globalCamera); }
+   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth) { updateUniforms(windowSize, chunkMove, globalCamera, depth); }
 
    [[nodiscard]] wgpu::BindGroup getBindGroup() const { return renderData.bindGroup; }
    [[nodiscard]] const PlanetConfig& getConfig() const { return config; }
@@ -117,7 +118,7 @@ public:
    Camera localCamera{};
 
 private:
-   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera) {
+   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth) {
       static constexpr float baseResolutionX = 640.f;
       static constexpr float baseResolutionY = 480.f;
       static constexpr float basePerspectiveStrength = 0.002f;
@@ -143,7 +144,8 @@ private:
                               .perspectiveStrength = perspectiveStrength,
                               .perspectiveScale = perspectiveStrength / basePerspectiveStrength,
                               .planetRadius = config.baseSize / 2.0f,
-                              ._pad = {0.0f, 0.0f, 0.0f}};
+                              .planetDepth = depth,
+                              ._pad = {0.0f, 0.0f}};
 
       queue.writeBuffer(renderData.uniformBuffer.getBuffer(), 0, &uData, sizeof(UniformData));
    }

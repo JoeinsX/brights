@@ -1,10 +1,4 @@
 /*** assets/shaders/terrain/terrain.wgsl ***/
-struct VertexOutput {
-    @builtin(position) position: vec4f,
-    @location(0) uv: vec2f,
-    @location(1) screenUv: vec2f,
-};
-
 struct Uniforms {
     macroOffset: vec2i,
     offset: vec2f,
@@ -17,6 +11,7 @@ struct Uniforms {
     perspectiveStrength: f32,
     perspectiveScale: f32,
     planetRadius: f32,
+    planetDepth: f32,
 };
 
 @group(0) @binding(0) var<uniform> u_config: Uniforms;
@@ -29,17 +24,16 @@ struct Uniforms {
 #include "tile.wgsl"
 
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    var pos = array<vec2f, 6>(
-        vec2f(-1.0, -1.0), vec2f( 1.0, -1.0), vec2f(-1.0,  1.0),
-        vec2f(-1.0,  1.0), vec2f( 1.0, -1.0), vec2f( 1.0,  1.0)
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
+    var corners = array<vec2f, 6>(
+        vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(0.0, 1.0),
+        vec2f(0.0, 1.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0)
     );
-    var p = pos[in_vertex_index];
-    var out: VertexOutput;
-    out.position = vec4f(p, 0.0, 1.0);
-    out.screenUv = vec2f(p.x * 0.5 + 0.5, 1.0 - (p.y * 0.5 + 0.5));
-    out.uv = out.screenUv + u_config.centerOffset;
-    return out;
+    let centerNdc = vec2f(-2.0 * u_config.centerOffset.x - 1.0, 2.0 * u_config.centerOffset.y + 1.0);
+    let halfExtent = (2.0 * u_config.scale * u_config.planetRadius + 4.0) / u_config.resolution;
+    let lo = clamp(centerNdc - halfExtent, vec2f(-1.0), vec2f(1.0));
+    let hi = clamp(centerNdc + halfExtent, vec2f(-1.0), vec2f(1.0));
+    return vec4f(mix(lo, hi, corners[in_vertex_index]), u_config.planetDepth, 1.0);
 }
 
 #include "util.wgsl"
@@ -60,6 +54,8 @@ fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     let hD = nh.tiles[8].height; // Down (0, 1)
 
     let edgeDists = vec4f(uv.x, 1.0 - uv.x, uv.y, 1.0 - uv.y);
+
+    if (all(edgeDists >= vec4f(softness))) { return centerH; }
 
     let isLower = vec4f(
         step(hL, centerH - 0.001),
@@ -111,47 +107,32 @@ fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     return mix(targetH, centerH, profile);
 }
 
-fn getTerrainColor(pos: vec2f, lod: f32) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
+fn sampleTile(spriteUv: vec2f, innerUv: vec2f, lod: f32, inset: f32) -> vec4f {
+    let uv = clamp(innerUv, vec2f(inset), vec2f(1.0 - inset));
+    return textureSampleLevel(t_atlas, s_atlas, (spriteUv + uv) / atlasGridSize, lod);
+}
 
+fn getTerrainColor(pos: vec2f, lod: f32, inset: f32) -> vec4f {
     let idTop = fetchTileUv(floor(pos)).xy;
 
     let uvTop = fract(pos);
 
-    return textureSampleLevel(t_atlas, s_atlas, (idTop + uvTop) / atlasGridSize, lod);
-}
-
-fn getTileBlendWeight(pos: vec2f) -> f32 {
-return pos.x*50+pos.y;
+    return sampleTile(idTop, uvTop, lod, inset);
 }
 
 #include "normal.wgsl"
 
-fn hash(p: vec2f) -> f32 {
-    return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);
-}
-
 fn getBlendedColorNeighborhood(
     worldPos: vec3f,
     lod: f32,
+    inset: f32,
     nh: TileNeighborhood
 ) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
-
     let uvZ = fract(worldPos.xy);
     let gridPos = worldPos.xy - 0.5;
     let baseTile = floor(gridPos);
 
-    let noiseScale = 1.0; // How fast the wiggle changes
-    let noiseAmp = 0.05;  // How wide the wiggle is
-
-    let warp = vec2f(
-        sin(worldPos.y * noiseScale),
-        cos(worldPos.x * noiseScale)
-    ) * noiseAmp;
-
     let f = fract(gridPos);
-    //let f = clamp(fract(gridPos) + warp, vec2f(0.0), vec2f(1.0));
 
     var s_vals: vec4f; // Softness for TL, TR, BL, BR
     var h_vals: vec4f; // Height for TL, TR, BL, BR
@@ -207,64 +188,46 @@ fn getBlendedColorNeighborhood(
     // Tile 0: Top-Left
     if (w.x > 0.0001) {
         let ts = fetchTileUv(baseTile).xy; // + vec2(0,0)
-        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.x;
+        totalColor += sampleTile(ts, uvZ, lod, inset) * w.x;
         totalWeight += w.x;
     }
 
     // Tile 1: Top-Right
     if (w.y > 0.0001) {
         let ts = fetchTileUv(baseTile + vec2f(1.0, 0.0)).xy;
-        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.y;
+        totalColor += sampleTile(ts, uvZ, lod, inset) * w.y;
         totalWeight += w.y;
     }
 
     // Tile 2: Bottom-Left
     if (w.z > 0.0001) {
         let ts = fetchTileUv(baseTile + vec2f(0.0, 1.0)).xy;
-        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.z;
+        totalColor += sampleTile(ts, uvZ, lod, inset) * w.z;
         totalWeight += w.z;
     }
 
     // Tile 3: Bottom-Right
     if (w.w > 0.0001) {
         let ts = fetchTileUv(baseTile + vec2f(1.0, 1.0)).xy;
-        totalColor += textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod) * w.w;
+        totalColor += sampleTile(ts, uvZ, lod, inset) * w.w;
         totalWeight += w.w;
     }
 
     return totalColor / max(totalWeight, 0.0001);
 }
 
-fn getBlendedTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32, nb: TileNeighborhood) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
-    var w = pow(abs(normal), vec3f(4.0));
-    w = w / (w.x + w.y + w.z);
-
-    let tileID = fetchTileUv(floor(pos.xy));
-    if (tileID.x < 0.0) { return vec4f(0.0); }
-
-    let uvZ = fract(pos.xy);
-    let uvX = vec2f(fract(pos.y), 1.0 - fract(pos.z * perspectiveScale));
-    let uvY = vec2f(fract(pos.x), 1.0 - fract(pos.z * perspectiveScale));
-
-    let colZ = getBlendedColorNeighborhood(pos, lod, nb);
-    let colX = textureSampleLevel(t_atlas, s_atlas, (tileID + uvX) / atlasGridSize, lod);
-    let colY = textureSampleLevel(t_atlas, s_atlas, (tileID + uvY) / atlasGridSize, lod);
-
-    return colX * w.x + colY * w.y + colZ * w.z;
-}
-
-fn getBlendedTriplanarColorNeighborhood1(
+fn getBlendedTriplanarColorNeighborhood(
     worldPos: vec3f,
     normal: vec3f,
     perspectiveScale: f32,
     lod: f32,
+    inset: f32,
     nh: TileNeighborhood
 ) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
-
-    var wAxis = pow(abs(normal), vec3f(4.0));
+    let n2 = normal * normal;
+    var wAxis = n2 * n2;
     wAxis = wAxis / (wAxis.x + wAxis.y + wAxis.z);
+    let sideActive = wAxis.x + wAxis.y > 0.003;
 
     let uvZ = fract(worldPos.xy);
     let uvX = vec2f(fract(worldPos.y), 1.0 - fract(worldPos.z * perspectiveScale));
@@ -274,9 +237,8 @@ fn getBlendedTriplanarColorNeighborhood1(
     let baseTile = floor(gridPos);
     let f = fract(gridPos);
 
-    let uv_center = fract(worldPos.xy);
-    let is_right = uv_center.x >= 0.5;
-    let is_down  = uv_center.y >= 0.5;
+    let is_right = uvZ.x >= 0.5;
+    let is_down  = uvZ.y >= 0.5;
 
     var td0: TileData;
     var td1: TileData;
@@ -320,10 +282,11 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile).xy;
-            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
-            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
-            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
-            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            var col = sampleTile(ts, uvZ, lod, inset);
+            if (sideActive) {
+                col = col * wAxis.z + sampleTile(ts, uvX, lod, inset) * wAxis.x + sampleTile(ts, uvY, lod, inset) * wAxis.y;
+            }
+            finalColor += col * w;
             totalWeight += w;
         }
     }
@@ -338,10 +301,11 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(1.0, 0.0)).xy;
-            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
-            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
-            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
-            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            var col = sampleTile(ts, uvZ, lod, inset);
+            if (sideActive) {
+                col = col * wAxis.z + sampleTile(ts, uvX, lod, inset) * wAxis.x + sampleTile(ts, uvY, lod, inset) * wAxis.y;
+            }
+            finalColor += col * w;
             totalWeight += w;
         }
     }
@@ -356,10 +320,11 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(0.0, 1.0)).xy;
-            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
-            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
-            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
-            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            var col = sampleTile(ts, uvZ, lod, inset);
+            if (sideActive) {
+                col = col * wAxis.z + sampleTile(ts, uvX, lod, inset) * wAxis.x + sampleTile(ts, uvY, lod, inset) * wAxis.y;
+            }
+            finalColor += col * w;
             totalWeight += w;
         }
     }
@@ -374,10 +339,11 @@ fn getBlendedTriplanarColorNeighborhood1(
 
         if (w > 0.0001) {
             let ts = fetchTileUv(baseTile + vec2f(1.0, 1.0)).xy;
-            let colZ = textureSampleLevel(t_atlas, s_atlas, (ts + uvZ) / atlasGridSize, lod);
-            let colX = textureSampleLevel(t_atlas, s_atlas, (ts + uvX) / atlasGridSize, lod);
-            let colY = textureSampleLevel(t_atlas, s_atlas, (ts + uvY) / atlasGridSize, lod);
-            finalColor += (colX * wAxis.x + colY * wAxis.y + colZ * wAxis.z) * w;
+            var col = sampleTile(ts, uvZ, lod, inset);
+            if (sideActive) {
+                col = col * wAxis.z + sampleTile(ts, uvX, lod, inset) * wAxis.x + sampleTile(ts, uvY, lod, inset) * wAxis.y;
+            }
+            finalColor += col * w;
             totalWeight += w;
         }
     }
@@ -385,57 +351,54 @@ fn getBlendedTriplanarColorNeighborhood1(
     return finalColor / max(totalWeight, 0.0001);
 }
 
-fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32, nb: TileNeighborhood) -> vec4f {
-    let atlasGridSize = vec2f(16.0, 16.0);
-    var w = pow(abs(normal), vec3f(4.0));
+fn getTriplanarColorNeighborhood(pos: vec3f, normal: vec3f, perspectiveScale: f32, lod: f32, inset: f32, nb: TileNeighborhood) -> vec4f {
+    let n2 = normal * normal;
+    var w = n2 * n2;
     w = w / (w.x + w.y + w.z);
 
     let tileID = fetchTileUv(floor(pos.xy));
     if (tileID.x < 0.0) { return vec4f(0.0); }
 
-    let uvZ = fract(pos.xy);
+    let colZ = sampleTile(tileID, fract(pos.xy), lod, inset);
+    if (w.x + w.y < 0.003) { return colZ; }
+
     let uvX = vec2f(fract(pos.y), 1.0 - fract(pos.z * perspectiveScale));
     let uvY = vec2f(fract(pos.x), 1.0 - fract(pos.z * perspectiveScale));
 
-    let colZ = textureSampleLevel(t_atlas, s_atlas, (tileID + uvZ) / atlasGridSize, lod);
-    let colX = textureSampleLevel(t_atlas, s_atlas, (tileID + uvX) / atlasGridSize, lod);
-    let colY = textureSampleLevel(t_atlas, s_atlas, (tileID + uvY) / atlasGridSize, lod);
+    let colX = sampleTile(tileID, uvX, lod, inset);
+    let colY = sampleTile(tileID, uvY, lod, inset);
 
     return colX * w.x + colY * w.y + colZ * w.z;
 }
 
 const PI = 3.1415926535897932384626433832795;
 
+const atlasGridSize = vec2f(16.0, 16.0);
+
 const simpleModeScaleThreshold = 3.0;
 
 const maxViewLean = 1.0;
 
-struct FragmentOutput {
-    @location(0) color: vec4f,
-    @builtin(frag_depth) depth: f32,
-};
+// Hit refinement halvings; 6 is already sub-texel, raise if walls shimmer.
+const binarySearchSteps = 6;
 
 @fragment
-fn fs_main(in: VertexOutput) -> FragmentOutput  {
-    var res: FragmentOutput;
-
-    let atlasGridSize = vec2f(16.0, 16.0);
-
-    let screenPos = in.uv * u_config.resolution;
+fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
+    let screenPos = fragPos.xy + u_config.centerOffset * u_config.resolution;
     var baseWorldPos = (screenPos / u_config.scale) + u_config.offset;
     let resolutionScale = u_config.resolutionScale;
     let viewCenter = u_config.offset;
 
     let bias = min(0.006 / u_config.scale, 0.005);
 
-    let simpleModeActive = u_config.scale < 3.0;
+    let simpleModeActive = u_config.scale < simpleModeScaleThreshold;
 
     let simpleModeSmoothCoefficient = smoothstep(0.0, 1.0, u_config.scale - simpleModeScaleThreshold);
 
     let perspectiveStrength = u_config.perspectiveStrength * simpleModeSmoothCoefficient;
     let perspectiveScale = u_config.perspectiveScale;
 
-    var viewVec = (in.screenUv - vec2f(0.5)) * u_config.resolution * perspectiveStrength / resolutionScale;
+    var viewVec = (fragPos.xy - 0.5 * u_config.resolution) * perspectiveStrength / resolutionScale;
     viewVec *= min(1.0, maxViewLean / max(length(viewVec), 0.00001));
 
     let radialVector = baseWorldPos - viewCenter;
@@ -452,9 +415,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
     let z = sqrt(1.0 - distSq);
     let sphereNormal = vec3f(p.x, p.y, z);
 
-    let phi = atan2(sphereNormal.x, sphereNormal.z);
-    let theta = asin(sphereNormal.y);
-
     let u = sphereNormal.x / (1.0 + sphereNormal.z)*0.5;
     let v = sphereNormal.y / (1.0 + sphereNormal.z)*0.5;
 
@@ -464,8 +424,6 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
     let tangent = normalize(cross(up, sphereNormal + vec3f(0.00001)));
     let bitangent = cross(sphereNormal, tangent);
     let tbn = mat3x3f(tangent, bitangent, sphereNormal);
-
-    var finalColor = vec4f(0.0);
 
     var rayPos = vec3f(baseWorldPos, 2.0);
 
@@ -482,48 +440,49 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
 
     var hit = false;
 
-    var nh = fetchTileNeighborhood(rayPos.xy);
+    var nh: TileNeighborhood;
+    var nhValid = false;
 
-    if (u_config.scale < 3.0) {
-        let h = getSmoothedHeightNeighborhood(rayPos.xy, nh);
-        rayPos.z = h;
+    if (simpleModeActive) {
+        nh = fetchTileNeighborhood(rayPos.xy);
+        nhValid = true;
+        rayPos.z = getSmoothedHeightNeighborhood(rayPos.xy, nh);
         hit = true;
     }
     else {
+        var center = fetchTileData(rayPos.xy);
+        let invRayDir = 1.0 / rayDir;
         for(var i=0; i<10; i+=1)
         {
-            let tileData = nh.tiles[0];
-            let tileMaxHeight = tileData.height;
+            let tileMaxHeight = center.height;
 
-            let tileSoftness = tileData.softness;
+            let tileSoftness = center.softness;
 
             var gridBorder = floor(rayPos.xy) + gridBorderOffset;
 
             var borderDistance = vec3f(gridBorder - rayPos.xy, min(0.0, tileMaxHeight - rayPos.z));
 
-            var borderTime = borderDistance / rayDir;
+            var borderTime = borderDistance * invRayDir;
 
             var exitTime2 = min(borderTime.x, borderTime.y);
-            var exitTime3 = min(exitTime2, borderTime.z);
+            let exitTime3 = min(exitTime2, borderTime.z);
 
             if(borderTime.z <= exitTime2)
             {
-                if(borderTime.z <=0.0 && (tileSoftness <= 0.05 || tileData.skipRaymarching))
+                if(borderTime.z <=0.0 && (tileSoftness <= 0.05 || center.skipRaymarching))
                 {
                     hit = true;
                     break;
                 }
 
-                let prevRayPos = rayPos;
                 rayPos += rayDir * (exitTime3 + bias);
 
                 borderDistance = vec3f(gridBorder - rayPos.xy, tileMaxHeight - rayPos.z);
-                borderTime = abs(borderDistance / rayDir);
+                borderTime = abs(borderDistance * invRayDir);
 
                 exitTime2 = min(borderTime.x, borderTime.y);
-                exitTime3 = min(exitTime2, borderTime.z);
 
-                if(tileSoftness <= 0.05 || tileData.skipRaymarching)
+                if(tileSoftness <= 0.05 || center.skipRaymarching)
                 {
                     hit = true;
                     break;
@@ -532,6 +491,9 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
                 {
                     let exitTime = exitTime2 - bias;
                     var exitRayPos = rayPos + rayDir * exitTime;
+
+                    nh = fetchTileNeighborhood(rayPos.xy);
+                    nhValid = true;
 
                     let enterHeight = getSmoothedHeightNeighborhood(rayPos.xy, nh);
 
@@ -543,7 +505,7 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
 
                     let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
 
-                    let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(nh.tiles[0].advancedRaymarching));
+                    let steps = i32(sqrt(160.0 * max(0.0, 0.5 - tileSoftness)) * f32(center.advancedRaymarching));
 
                     let stepSize = exitTime / f32(steps+1);
                     var marchedT = 0.0;
@@ -565,12 +527,13 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
                     if(exitHeight < exitRayPos.z && !foundHit) //no intersection
                     {
                         rayPos += rayDir * (exitTime2 + bias);
-                        nh = fetchTileNeighborhood(rayPos.xy);
+                        center = fetchTileData(rayPos.xy);
+                        nhValid = false;
                     }
                     else
                     {
                         var currentRayPos = (rayPos+exitRayPos)/2.0;
-                        for(var j=0; j<10; j+=1)
+                        for(var j=0; j<binarySearchSteps; j+=1)
                         {
                             let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);
                             let prevCurrentRayPos = currentRayPos;
@@ -593,24 +556,28 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
             }
             else {
                 rayPos += rayDir * (exitTime2 + bias);
-                nh = fetchTileNeighborhood(rayPos.xy);
+                center = fetchTileData(rayPos.xy);
             }
         }
     }
 
     if(hit) {
-        // Reconstruct the final hit position using sphere normal and fragment position
-        //let hitPos = sphereNormal * (sphereRadius + rayPos.z);
-        // Fill the fragment depth based on the reconstructed position Z
-        res.depth = 1.0-sphereNormal.z;//rayPos.z/2.0;
+        if (!nhValid) {
+            nh = fetchTileNeighborhood(rayPos.xy);
+        }
 
-        let lod = log(25.f/u_config.scale*min(u_config.resolutionScale.x, u_config.resolutionScale.y))-1.0;
+        let zSafe = max(z, 0.001);
+        let jDiag = (1.0 + z) + p * p / zSafe;
+        let jCross = p.x * p.y / zSafe;
+        let jToTiles = 0.5 / ((1.0 + z) * (1.0 + z)) * f32(1024) * u_config.sphereMapScale / (u_config.scale * sphereRadius);
+        let footprintTiles = max(length(vec2f(jDiag.x, jCross)), length(vec2f(jCross, jDiag.y))) * jToTiles;
+        let spriteTexels = f32(textureDimensions(t_atlas).x) / atlasGridSize.x;
+        let lod = log2(max(footprintTiles * spriteTexels, 0.0001));
+        let inset = min(0.5, 0.5 * exp2(ceil(max(lod, 0.0))) / spriteTexels);
 
         let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
 
         let rotatedNormal = normalize(tbn * localNormal);
-
-        let f = fract(rayPos.xy);
 
         var albedo: vec4f;
 
@@ -620,22 +587,22 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
         {
             if(blending)
             {
-                albedo = getBlendedTriplanarColorNeighborhood1(rayPos, localNormal, perspectiveScale, lod, nh);
+                albedo = getBlendedTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, inset, nh);
             }
             else
             {
-                albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, nh);
+                albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, inset, nh);
             }
         }
         else
         {
             if(blending)
             {
-                albedo = getBlendedColorNeighborhood(rayPos, lod, nh);
+                albedo = getBlendedColorNeighborhood(rayPos, lod, inset, nh);
             }
             else
             {
-                albedo = getTerrainColor(rayPos.xy, lod);
+                albedo = getTerrainColor(rayPos.xy, lod, inset);
             }
         }
 
@@ -644,13 +611,8 @@ fn fs_main(in: VertexOutput) -> FragmentOutput  {
         let ambient = 0.4;
         let lighting = min(1.0, ambient + diff);
 
-        finalColor = albedo * lighting;
-    } else {
-        finalColor = vec4f(0.1, 0.1, 0.1, 1.0);
+        return vec4f(albedo.rgb * lighting, albedo.a);
     }
 
-    res.color = finalColor;
-    //return finalColor;
-
-    return res;
+    return vec4f(0.1, 0.1, 0.1, 1.0);
 }

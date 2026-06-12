@@ -15,6 +15,9 @@ fn getAnalyticalNormalNeighborhood(worldPos: vec2f, nb: TileNeighborhood) -> vec
     let hD = nb.tiles[8].height;
 
     let edgeDists = vec4f(uv.x, 1.0 - uv.x, uv.y, 1.0 - uv.y);
+
+    if (all(edgeDists >= vec4f(detectionSoftness))) { return vec3f(0.0, 0.0, 1.0); }
+
     let isLower = vec4f(
         step(hL, centerH - 0.001),
         step(hR, centerH - 0.001),
