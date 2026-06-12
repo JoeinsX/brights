@@ -8,6 +8,7 @@
 #include "platform/input.hpp"
 
 #include <cmath>
+#include <utility>
 #include <webgpu/webgpu.hpp>
 
 class Game {
@@ -47,7 +48,7 @@ public:
 
       const int focusedIndex = worldView.getFocusedPlanetIndex();
       for (size_t i = 0; i < planets.size(); ++i) {
-         planets[i]->update(dt, static_cast<int>(i) == focusedIndex);
+         planets[i]->update(dt, std::cmp_equal(i, focusedIndex));
       }
 
       worldView.update(dt, planets);
@@ -67,17 +68,17 @@ private:
       registry.registerTile(TileID::ColdGrass, 2, 0, 4, 1.0);
       registry.registerTile(TileID::Stone, 3, 0, 4, 1.8, 0.4);
       registry.registerTile(TileID::HardStone, 4, 0, 4, 1.8, 0.4);
-      registry.registerTile(TileID::Gravel, 5, 0, 1, 1.0, 0.7);
-      registry.registerTile(TileID::HardGravel, 6, 0, 1, 1.0);
-      registry.registerTile(TileID::Snow, 5, 1, 4, 1.0, 0.5);
-      registry.registerTile(TileID::Ice, 6, 1, 4, 0.8);
-      registry.registerTile(TileID::Planks, 7, 0, 1, 1.8, 0.0);
-      registry.registerTile(TileID::PlankFloor, 8, 0, 1, 1.0);
+      registry.registerTile(TileID::Sand, 5, 0, 4, 0.8);
+      registry.registerTile(TileID::ColdWater, 6, 0, 4, 0.7);
+      registry.registerTile(TileID::Ice, 7, 0, 4, 0.8);
+      registry.registerTile(TileID::Snow, 8, 0, 4, 1.0, 0.5);
       registry.registerTile(TileID::RedOre, 9, 0, 1, 1.6);
       registry.registerTile(TileID::BlueOre, 10, 0, 1, 1.6);
-      registry.registerTile(TileID::ColdWater, 1, 5, 4, 0.7);
       registry.registerTile(TileID::BurntGround, 11, 0, 1, 0.7);
-      registry.registerTile(TileID::Sand, 12, 0, 4, 0.8);
+      registry.registerTile(TileID::Gravel, 12, 0, 1, 1.0, 0.7);
+      registry.registerTile(TileID::HardGravel, 13, 0, 1, 1.0);
+      registry.registerTile(TileID::Planks, 14, 0, 1, 1.8, 0.0);
+      registry.registerTile(TileID::PlankFloor, 15, 0, 1, 1.0);
    }
 
    std::vector<std::unique_ptr<Planet>> planets;
@@ -85,7 +86,7 @@ private:
    GameGraphics* graphicsCtx = nullptr;
    wgpu::Queue queue = nullptr;
 
-   ThreadPool threadPool;
+   Threadpool threadPool;
 
    TileRegistry registry;
    std::mt19937 rng;

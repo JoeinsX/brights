@@ -3,7 +3,7 @@
 #include "chunk.hpp"
 #include "chunkMesher.hpp"
 #include "core/graphics/camera.hpp"
-#include "util/threadpool.hpp"
+#include "util/Threadpool.hpp"
 #include "worldGenerator.hpp"
 #include "worldRenderAdapter.hpp"
 
@@ -19,7 +19,7 @@
 
 class World {
 public:
-   explicit World(ThreadPool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
+   explicit World(Threadpool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
                   uint32_t unloadingThreshold):
       threadPool(threadPool), loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator),
       renderAdapter(renderAdapter) {}
@@ -169,7 +169,7 @@ private:
 
    uint32_t loadingRadius = 0;
    uint32_t unloadingThreshold = 0;
-   ThreadPool& threadPool;
+   Threadpool& threadPool;
    TileRegistry& registry;
    WorldGenerator& worldGenerator;
    WorldRenderAdapter& renderAdapter;

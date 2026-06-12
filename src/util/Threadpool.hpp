@@ -3,9 +3,9 @@
 #include <queue>
 #include <thread>
 
-class ThreadPool {
+class Threadpool {
 public:
-   explicit ThreadPool(const size_t threads): {
+   explicit Threadpool(const size_t threads) {
       for (size_t i = 0; i < threads; ++i) {
          workers.emplace_back([this] {
             for (;;) {
@@ -34,7 +34,7 @@ public:
       condition.notify_one();
    }
 
-   ~ThreadPool() {
+   ~Threadpool() {
       {
          const std::unique_lock<std::mutex> lock(queue_mutex);
          stop = true;
@@ -44,6 +44,11 @@ public:
          worker.join();
       }
    }
+
+   Threadpool(const Threadpool&) = delete;
+   Threadpool(Threadpool&&) = delete;
+   Threadpool& operator =(const Threadpool&) = delete;
+   Threadpool& operator =(Threadpool&&) = delete;
 
 private:
    std::vector<std::thread> workers;

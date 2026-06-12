@@ -13,12 +13,34 @@ class WGSLPreprocessor {
 public:
    void addDefine(const std::string& name) { defines.insert(name); }
 
-   [[nodiscard]] std::string load(const std::filesystem::path& path) const { return parseFile(path); }
+   // Register a directory searched for includes that are not found next to the including file.
+   void addIncludeRoot(const std::filesystem::path& root) { includeRoots.push_back(root); }
+
+   [[nodiscard]] std::string load(const std::filesystem::path& path) const {
+      std::set<std::filesystem::path> included{path.lexically_normal()};
+      return parseFile(path, included);
+   }
 
 private:
    std::set<std::string> defines;
+   std::vector<std::filesystem::path> includeRoots;
 
-   [[nodiscard]] std::string parseFile(const std::filesystem::path& path) const {
+   // Resolve an #include relative to the including file first, then each registered root.
+   [[nodiscard]] std::filesystem::path resolveInclude(const std::filesystem::path& fromDir, const std::string& rel) const {
+      const std::filesystem::path local = fromDir / rel;
+      if (std::filesystem::exists(local)) {
+         return local;
+      }
+      for (const std::filesystem::path& root : includeRoots) {
+         std::filesystem::path candidate = root / rel;
+         if (std::filesystem::exists(candidate)) {
+            return candidate;
+         }
+      }
+      return local;
+   }
+
+   [[nodiscard]] std::string parseFile(const std::filesystem::path& path, std::set<std::filesystem::path>& included) const {
       std::ifstream file(path);
       if (!file.is_open()) {
          std::cerr << "WGSL Error: Could not open file " << path << '\n';
@@ -75,8 +97,10 @@ private:
          }
 
          if (std::regex_match(line, match, includeRegex)) {
-            const std::filesystem::path includePath = path.parent_path() / match[1].str();
-            output << parseFile(includePath) << "\n";
+            const std::filesystem::path includePath = resolveInclude(path.parent_path(), match[1].str());
+            if (included.insert(includePath.lexically_normal()).second) {
+               output << parseFile(includePath, included) << "\n";
+            }
             continue;
          }
 

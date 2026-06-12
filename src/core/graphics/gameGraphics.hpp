@@ -27,7 +27,6 @@ public:
 
       const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint8_t);
       const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint16_t);
-      const uint64_t chunkRefSize = Chunk::COUNT_SQUARED * sizeof(uint32_t);
       const uint64_t uniformSize = sizeof(UniformData);
 
       atlasTexture.load(device, queue, "assets/atlas.png");
