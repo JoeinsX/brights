@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/resources/resource.hpp"
 #include "core/world/chunk.hpp"
 #include "core/world/planet.hpp"
 #include "platform/window.hpp"
@@ -29,7 +30,7 @@ public:
       const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint16_t);
       const uint64_t uniformSize = sizeof(UniformData);
 
-      atlasTexture.load(device, queue, "assets/atlas.png");
+      atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/atlas.png"));
 
       std::vector<wgpu::BindGroupLayoutEntry> layoutEntries(ShaderSlots::Num);
       layoutEntries[ShaderSlots::Uniforms] = WGPUHelpers::
@@ -54,7 +55,6 @@ public:
 
       pass.setPipeline(pipeline);
 
-      // Simply iterate and draw
       for (const auto& planet : planets) {
          pass.setBindGroup(0, planet->getBindGroup(), 0, nullptr);
          pass.draw(6, 1, 0, 0);
@@ -140,5 +140,6 @@ private:
 
    wgpu::BindGroupLayout bindGroupLayout = nullptr;
    wgpu::RenderPipeline pipeline = nullptr;
+   ResourceManager resourceManager;
    GpuTexture atlasTexture;
 };
