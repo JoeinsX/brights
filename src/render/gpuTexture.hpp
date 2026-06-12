@@ -21,7 +21,7 @@ public:
          return false;
       }
 
-      static constexpr uint8_t mipLevelCount = 4;
+      static constexpr uint8_t mipLevelCount = 5;
 
       wgpu::TextureDescriptor textureDesc;
       textureDesc.dimension = wgpu::TextureDimension::_2D;
@@ -46,11 +46,11 @@ public:
       samplerDesc.addressModeV = wgpu::AddressMode::ClampToEdge;
       samplerDesc.addressModeW = wgpu::AddressMode::ClampToEdge;
       samplerDesc.magFilter = wgpu::FilterMode::Nearest;
-      samplerDesc.minFilter = wgpu::FilterMode::Nearest;
+      samplerDesc.minFilter = wgpu::FilterMode::Linear;
       samplerDesc.mipmapFilter = wgpu::MipmapFilterMode::Linear;
       samplerDesc.lodMinClamp = 0.0f;
 
-      samplerDesc.lodMaxClamp = mipLevelCount;
+      samplerDesc.lodMaxClamp = mipLevelCount - 1;
       samplerDesc.maxAnisotropy = 1;
       sampler = device.createSampler(samplerDesc);
 
