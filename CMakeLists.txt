@@ -9,44 +9,23 @@ set(CMAKE_INSTALL_PREFIX
     FORCE
 )
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON)
 
-add_executable(
-    brights
-    src/main.cpp
-    src/render/wgslPreprocessor.hpp
-    src/render/textureImage.hpp
-    src/core/graphics/camera.hpp
-    src/core/world/worldGenerator.hpp
-    src/core/world/chunk.hpp
-    src/core/world/tile.hpp
-    src/render/graphicsContext.hpp
-    src/platform/window.hpp
-    src/util/logger.hpp
-    src/core/world/world.hpp
-    src/util/threadpool.hpp
-    src/render/gpuBuffer.hpp
-    src/render/gpuTexture.hpp
-    src/render/gpuHelpers.hpp
-    src/render/gpuContext.hpp
-    src/core/world/worldRenderAdapter.hpp
-    src/platform/input.hpp
-    src/app/game.hpp
-    src/app/application.hpp
-    src/core/world/chunkMesher.hpp
-    src/core/world/chunkMesher.cpp
-    src/util/bitmask.hpp
-    src/core/graphics/gameGraphics.hpp
-    src/core/world/planet.hpp
-    src/core/world/worldView.hpp
+file(
+    GLOB_RECURSE BRIGHTS_SOURCES
+    CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
+
+add_executable(brights ${BRIGHTS_SOURCES})
 
 set_target_properties(
     brights
     PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
         COMPILE_WARNING_AS_ERROR OFF

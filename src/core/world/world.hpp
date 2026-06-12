@@ -3,7 +3,7 @@
 #include "chunk.hpp"
 #include "chunkMesher.hpp"
 #include "core/graphics/camera.hpp"
-#include "util/Threadpool.hpp"
+#include "util/threadpool.hpp"
 #include "worldGenerator.hpp"
 #include "worldRenderAdapter.hpp"
 
@@ -21,7 +21,7 @@ class World {
 public:
    explicit World(Threadpool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
                   uint32_t unloadingThreshold):
-      threadPool(threadPool), loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator),
+      loadingRadius(loadingRadius), threadPool(threadPool), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator),
       renderAdapter(renderAdapter) {}
 
    [[nodiscard]] std::shared_ptr<Chunk> getChunk(int x, int y) const {

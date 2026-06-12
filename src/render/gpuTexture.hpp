@@ -1,6 +1,6 @@
 #pragma once
 
-#include "textureImage.hpp"
+#include "core/resources/resource.hpp"
 
 #include <algorithm>
 #include <webgpu/webgpu.hpp>
@@ -15,8 +15,7 @@ public:
 
    ~GpuTexture() { destroy(); }
 
-   bool load(wgpu::Device& device, wgpu::Queue& queue, const std::string& path) {
-      const TextureImage image(path);
+   bool load(wgpu::Device& device, wgpu::Queue& queue, const ImageResource& image) {
       if (!image.isValid()) {
          return false;
       }
@@ -80,7 +79,7 @@ public:
    [[nodiscard]] const wgpu::Sampler& getSampler() const { return sampler; }
 
 private:
-   void uploadWithMipmaps(wgpu::Queue& queue, const TextureImage& image, const wgpu::TextureDescriptor& textureDesc) {
+   void uploadWithMipmaps(wgpu::Queue& queue, const ImageResource& image, const wgpu::TextureDescriptor& textureDesc) {
       wgpu::ImageCopyTexture destination;
       destination.texture = texture;
       destination.origin = {0, 0, 0};
