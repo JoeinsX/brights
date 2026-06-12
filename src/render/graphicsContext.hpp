@@ -78,7 +78,8 @@ public:
    [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->getSurfaceFormat(); }
 
    static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath) {
-      const WGSLPreprocessor preprocessor;
+      WGSLPreprocessor preprocessor;
+      preprocessor.addIncludeRoot(shaderCodePath.parent_path().parent_path());   // shaders root, so modules can #include "lib/..." directly
       const std::string code = preprocessor.load(shaderCodePath);
 
       wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
