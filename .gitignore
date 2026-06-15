@@ -36,5 +36,6 @@
 /enc_temp_folder
 /cpm-cache
 /CMakeUserPresets.json
+/.PVS-Studio
 
 external/

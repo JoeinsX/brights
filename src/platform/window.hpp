@@ -2,24 +2,29 @@
 
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
+#include <glm/glm.hpp>
+
+struct WindowConfig {
+   glm::ivec2 position{100, 100};
+   glm::ivec2 size{1280, 720};
+};
 
 class Window {
 public:
    GLFWwindow* handle = nullptr;
 
-   bool initialize(const int width, const int height, const char* title, void* userPointer) {
+   bool initialize(const WindowConfig& config, const char* title, void* userPointer) {
       if (!glfwInit()) {
          return false;
       }
       glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
       glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-      handle = glfwCreateWindow(width, height, title, nullptr, nullptr);
-
-      glfwSetWindowPos(handle, 1250, 600);
+      handle = glfwCreateWindow(config.size.x, config.size.y, title, nullptr, nullptr);
       if (!handle) {
          return false;
       }
 
+      glfwSetWindowPos(handle, config.position.x, config.position.y);
       glfwSetWindowUserPointer(handle, userPointer);
       return true;
    }
@@ -34,10 +39,7 @@ public:
 
    [[nodiscard]] bool shouldClose() const { return glfwWindowShouldClose(handle); }
 
-   static bool pollEvents() {
-      glfwPollEvents();
-      return true;
-   }
+   static void pollEvents() { glfwPollEvents(); }
 
    void terminate() const {
       glfwDestroyWindow(handle);

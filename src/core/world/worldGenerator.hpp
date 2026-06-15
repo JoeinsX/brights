@@ -3,9 +3,7 @@
 #include "FastNoise/FastNoise.h"
 #include "chunk.hpp"
 
-#include <cmath>
-#include <glm/gtx/hash.hpp>
-#include <mutex>
+#include <glm/glm.hpp>
 #include <vector>
 
 class WorldGenerator {
@@ -72,15 +70,7 @@ private:
    }
 
 public:
-   WorldGenerator(uint64_t seed): seed(seed) {}
-
-   static void generateDefaultChunk(Chunk& chunk) {
-      for (int y = 0; y < Chunk::SIZE; ++y) {
-         for (int x = 0; x < Chunk::SIZE; ++x) {
-            chunk.setTerrain(x, y, TileID::Gravel);
-         }
-      }
-   }
+   explicit WorldGenerator(const uint64_t seed): seed(seed) {}
 
    void generate(Chunk& chunk) {
       const auto& ctx = getContext();
@@ -96,12 +86,12 @@ public:
       thread_local std::vector<float> oreMap(area);
       thread_local std::vector<float> treeMap(area);
 
-      ctx.elevation->GenUniformGrid2D(elevationMap.data(), offset.x, offset.y, size, size, 0.004f, seed);
-      ctx.river->GenUniformGrid2D(riverMap.data(), offset.x, offset.y, size, size, 0.005f, seed + 111);
-      ctx.temperature->GenUniformGrid2D(tempMap.data(), offset.x, offset.y, size, size, 0.002f, seed + 1923);
-      ctx.moisture->GenUniformGrid2D(moistureMap.data(), offset.x, offset.y, size, size, 0.003f, seed + 4821);
-      ctx.ore->GenUniformGrid2D(oreMap.data(), offset.x, offset.y, size, size, 0.05f, seed + 9991);
-      ctx.trees->GenUniformGrid2D(treeMap.data(), offset.x, offset.y, size, size, 1.0f, seed + 555);
+      ctx.elevation->GenUniformGrid2D(elevationMap.data(), offset.x, offset.y, size, size, 0.004f, static_cast<int>(seed));
+      ctx.river->GenUniformGrid2D(riverMap.data(), offset.x, offset.y, size, size, 0.005f, static_cast<int>(seed) + 111);
+      ctx.temperature->GenUniformGrid2D(tempMap.data(), offset.x, offset.y, size, size, 0.002f, static_cast<int>(seed) + 1923);
+      ctx.moisture->GenUniformGrid2D(moistureMap.data(), offset.x, offset.y, size, size, 0.003f, static_cast<int>(seed) + 4821);
+      ctx.ore->GenUniformGrid2D(oreMap.data(), offset.x, offset.y, size, size, 0.05f, static_cast<int>(seed) + 9991);
+      ctx.trees->GenUniformGrid2D(treeMap.data(), offset.x, offset.y, size, size, 1.0f, static_cast<int>(seed) + 555);
 
       for (int y = 0; y < size; ++y) {
          for (int x = 0; x < size; ++x) {

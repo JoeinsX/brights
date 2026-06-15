@@ -58,8 +58,8 @@ public:
    void initialize(wgpu::Device device, wgpu::Queue _queue, wgpu::BindGroupLayout layout, Threadpool& threadPool, const GpuTexture& sharedAtlas) {
       queue = _queue;
 
-      const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint8_t);
-      const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint16_t);
+      const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint8_t);
+      const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint16_t);
       const uint64_t uniformSize = sizeof(UniformData);
 
       renderData.tilemapBuffer.init(device, tileMapSize, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst, "Planet_TileMap");
@@ -109,6 +109,7 @@ public:
    void terminate() {
       if (renderData.bindGroup) {
          renderData.bindGroup.release();
+         renderData.bindGroup = nullptr;
       }
       renderData.tilemapBuffer.destroy();
       renderData.packedBuffer.destroy();

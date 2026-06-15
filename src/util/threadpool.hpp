@@ -1,7 +1,10 @@
 #pragma once
+#include <condition_variable>
+#include <functional>
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <vector>
 
 class Threadpool {
 public:
@@ -11,7 +14,7 @@ public:
             for (;;) {
                std::function<void()> task;
                {
-                  std::unique_lock<std::mutex> lock(this->queue_mutex);
+                  std::unique_lock<std::mutex> lock(this->queueMutex);
                   this->condition.wait(lock, [this] { return this->stop || !this->tasks.empty(); });
                   if (this->stop && this->tasks.empty()) {
                      return;
@@ -28,22 +31,25 @@ public:
    template<class F>
    void enqueue(F&& f) {
       {
-         const std::unique_lock<std::mutex> lock(queue_mutex);
+         const std::unique_lock<std::mutex> lock(queueMutex);
          tasks.emplace(std::forward<F>(f));
       }
       condition.notify_one();
    }
 
-   ~Threadpool() {
+   void shutdown() {
       {
-         const std::unique_lock<std::mutex> lock(queue_mutex);
+         const std::unique_lock<std::mutex> lock(queueMutex);
          stop = true;
       }
       condition.notify_all();
       for (std::thread& worker : workers) {
          worker.join();
       }
+      workers.clear();
    }
+
+   ~Threadpool() { shutdown(); }
 
    Threadpool(const Threadpool&) = delete;
    Threadpool(Threadpool&&) = delete;
@@ -53,7 +59,7 @@ public:
 private:
    std::vector<std::thread> workers;
    std::queue<std::function<void()>> tasks;
-   std::mutex queue_mutex;
+   std::mutex queueMutex;
    std::condition_variable condition;
    bool stop{false};
 };

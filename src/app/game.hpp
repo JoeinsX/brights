@@ -1,46 +1,55 @@
 #pragma once
 
 #include "core/graphics/gameGraphics.hpp"
+#include "core/resources/resource.hpp"
 #include "core/world/world.hpp"
 #include "core/world/worldGenerator.hpp"
 #include "core/world/worldRenderAdapter.hpp"
 #include "core/world/worldView.hpp"
 #include "platform/input.hpp"
+#include "render/gpuTexture.hpp"
+#include "util/logger.hpp"
 
-#include <cmath>
+#include <algorithm>
+#include <memory>
+#include <thread>
 #include <utility>
+#include <vector>
 #include <webgpu/webgpu.hpp>
 
 class Game {
 public:
-   Game(): threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {
-      static constexpr uint32_t galaxySeed = 0;
-      rng = std::mt19937{galaxySeed};
-   }
+   Game(): threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {}
 
-   void initialize(GameGraphics* _graphicsCtx, GpuContext& gpuContext, wgpu::Queue _queue) {
+   [[nodiscard]] bool initialize(GameGraphics* _graphicsCtx, GpuContext& gpuContext, wgpu::Queue _queue) {
       graphicsCtx = _graphicsCtx;
       queue = _queue;
 
       initializeGameContent();
 
-      const wgpu::Device device = gpuContext.getDevice();
+      wgpu::Device device = gpuContext.getDevice();
+      if (!atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/atlas.png"))) {
+         Log::error("failed to load texture atlas 'assets/atlas.png'");
+         return false;
+      }
 
       auto p1 = std::
          make_unique<Planet>(PlanetConfig{.position = {-1200.0f, 0.0f}, .seed = 42, .baseSize = 512.0f, .idleScrollSpeed = {100.0f, 50.0f}, .orbitParams = {1000.0f, 0.2f}},
                              registry);
-      p1->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      p1->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
       planets.push_back(std::move(p1));
 
       auto p2 = std::make_unique<Planet>(PlanetConfig{.position = {0.0f, 0.0f}, .seed = 1337, .baseSize = 1024.0f, .idleScrollSpeed = {-28.0f, 0.0f}}, registry);
-      p2->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      p2->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
       planets.push_back(std::move(p2));
 
       auto p3 = std::
          make_unique<Planet>(PlanetConfig{.position = {1200.0f, 0.0f}, .seed = 2550, .baseSize = 300.0f, .idleScrollSpeed = {/*13.33f, -24.13f*/}, .orbitParams = {1500.0f, -0.4f}},
                              registry);
-      p3->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, graphicsCtx->getAtlas());
+      p3->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
       planets.push_back(std::move(p3));
+
+      return true;
    }
 
    void update(float dt, const Input& input, glm::ivec2 windowSize) {
@@ -60,6 +69,12 @@ public:
    }
 
    [[nodiscard]] const std::vector<std::unique_ptr<Planet>>& getPlanets() const { return planets; }
+
+   void terminate() {
+      threadPool.shutdown();
+      planets.clear();
+      atlasTexture.destroy();
+   }
 
 private:
    void initializeGameContent() {
@@ -81,6 +96,9 @@ private:
       registry.registerTile(TileID::PlankFloor, 15, 0, 1, 1.0);
    }
 
+   ResourceManager resourceManager;
+   GpuTexture atlasTexture;
+
    std::vector<std::unique_ptr<Planet>> planets;
 
    GameGraphics* graphicsCtx = nullptr;
@@ -89,7 +107,5 @@ private:
    Threadpool threadPool;
 
    TileRegistry registry;
-   std::mt19937 rng;
-
    WorldView worldView;
 };

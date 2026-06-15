@@ -7,13 +7,13 @@
 #include "worldGenerator.hpp"
 #include "worldRenderAdapter.hpp"
 
-#include <condition_variable>
-#include <functional>
-#include <future>
+#include <array>
+#include <glm/gtx/hash.hpp>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <random>
-#include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 
@@ -21,17 +21,8 @@ class World {
 public:
    explicit World(Threadpool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
                   uint32_t unloadingThreshold):
-      loadingRadius(loadingRadius), threadPool(threadPool), unloadingThreshold(unloadingThreshold), registry(registry), worldGenerator(worldGenerator),
+      loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), threadPool(threadPool), registry(registry), worldGenerator(worldGenerator),
       renderAdapter(renderAdapter) {}
-
-   [[nodiscard]] std::shared_ptr<Chunk> getChunk(int x, int y) const {
-      const glm::ivec2 chunkPos{x, y};
-      const auto it = chunks.find(chunkPos);
-      if (it == chunks.end()) {
-         return nullptr;
-      }
-      return it->second;
-   }
 
    void update(const Camera& camera, const glm::ivec2& globalChunkMove) {
       processFinishedTasks();
@@ -105,8 +96,7 @@ private:
                }
             }
          } else {
-            result.chunk->setFlag(ChunkState::Meshed);
-            result.chunk->setFlag(ChunkState::NeedsGpuUpload);
+            result.chunk->markMeshed();
             pendingMeshing.erase(result.chunk->getPos());
             renderAdapter.onChunkDataUpdated(result.chunk->getPos());
          }
@@ -124,7 +114,7 @@ private:
       }
       auto chunk = it->second;
 
-      if (chunk->hasFlag(ChunkState::Meshed)) {
+      if (chunk->isMeshed()) {
          return;
       }
 

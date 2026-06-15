@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <glm/glm.hpp>
 
 enum class TileID : uint8_t {
@@ -25,24 +27,18 @@ enum class TileID : uint8_t {
 struct TileDefinition {
    glm::ivec2 atlasBase{};
    int variationCount = 1;
-   float height = 0.5f;
-   float softness = 0.5f;
+   float height = 0.0f;
+   float softness = 0.0f;
 };
 
 class TileRegistry {
 public:
-   void registerTile(const TileID id, const int x, const int y, const int variations, float height = 0.5f, float softness = 0.5f) {
-      defs[id] = {{x, y}, variations, height, softness};
+   void registerTile(const TileID id, const int x, const int y, const int variations, const float height = 0.5f, const float softness = 0.5f) {
+      defs[static_cast<size_t>(id)] = {{x, y}, variations, height, softness};
    }
 
-   [[nodiscard]] const TileDefinition* get(const TileID id) const {
-      const auto it = defs.find(id);
-      if (it != defs.end()) {
-         return &it->second;
-      }
-      return nullptr;
-   }
+   [[nodiscard]] const TileDefinition& get(const TileID id) const { return defs[static_cast<size_t>(id)]; }
 
 private:
-   std::unordered_map<TileID, TileDefinition> defs{};
+   std::array<TileDefinition, 256> defs{};
 };

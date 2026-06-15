@@ -8,7 +8,6 @@
 #include <array>
 #include <memory>
 #include <random>
-#include <vector>
 
 enum class AnalysisFlag : uint8_t {
    None = 0,
@@ -70,21 +69,19 @@ private:
             const int bufferRowOffset = (y + 1) * PADDED_SIZE + 1;
 
             for (int x = 0; x < CHUNK_SIZE; ++x) {
-               const int idx = centerRowOffset + x;
-               const TileID tID = centerChunk.terrainMap[idx];
-               const TileDefinition* def = registry.get(tID);
+               const TileID tID = centerChunk.terrainMap[centerRowOffset + x];
+               const TileDefinition& def = registry.get(tID);
 
-               buffer[bufferRowOffset + x] = {centerChunk.heightMap[idx], def ? def->softness : 0.0f, tID};
+               buffer[bufferRowOffset + x] = {def.height, def.softness, tID};
             }
          }
 
          auto copyTile = [&](int nIndex, int srcX, int srcY, int destX, int destY) {
             if (const auto& chunk = neighbors[nIndex]) {
-               const int idx = srcY * CHUNK_SIZE + srcX;
-               const TileID id = chunk->terrainMap[idx];
-               const TileDefinition* def = registry.get(id);
+               const TileID id = chunk->terrainMap[srcY * CHUNK_SIZE + srcX];
+               const TileDefinition& def = registry.get(id);
 
-               buffer[destY * PADDED_SIZE + destX] = {def ? def->height : 0.0f, def ? def->softness : 0.0f, id};
+               buffer[destY * PADDED_SIZE + destX] = {def.height, def.softness, id};
             } else {
                buffer[destY * PADDED_SIZE + destX] = {0.0f, 0.0f, TileID::Air};
             }
@@ -117,12 +114,9 @@ public:
       uint16_t* packedMapData = renderAdapter.getPackedDataPtrForChunk(chunk.getPos());
 
       for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
-         const TileID tID = chunk.terrainMap[i];
-         const TileDefinition* def = registry.get(tID);
+         const TileDefinition& def = registry.get(chunk.terrainMap[i]);
 
-         chunk.heightMap[i] = def ? def->height : 0.0f;
-
-         glm::vec2 terrainCoords = getAtlasCoords(def, rng);
+         const glm::vec2 terrainCoords = getAtlasCoords(def, rng);
          const uint8_t tx = static_cast<uint8_t>(std::clamp(terrainCoords.x, 0.0f, 15.0f));
          const uint8_t ty = static_cast<uint8_t>(std::clamp(terrainCoords.y, 0.0f, 15.0f));
 
@@ -133,26 +127,20 @@ public:
       ctx.build(chunk, neighbors, registry);
 
       for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
-         int x = i % CHUNK_SIZE;
-         int y = i / CHUNK_SIZE;
+         const int x = i % CHUNK_SIZE;
+         const int y = i / CHUNK_SIZE;
 
          const auto& tile = ctx.get(x, y);
-
-         chunk.packedMap[i] = TilePacker::pack(tile.height, tile.softness, tile.rFlags);
-         packedMapData[i] = chunk.packedMap[i];
+         packedMapData[i] = TilePacker::pack(tile.height, tile.softness, tile.rFlags);
       }
    }
 
 private:
-   static glm::vec2 getAtlasCoords(const TileDefinition* def, std::mt19937& rng) {
-      if (!def) {
-         return {-1.0f, -1.0f};
-      }
-
-      auto atlasBase = def->atlasBase;
-      if (def->variationCount > 1) {
-         std::uniform_int_distribution<int> dist(0, def->variationCount - 1);
-         atlasBase.y += static_cast<float>(dist(rng));
+   static glm::vec2 getAtlasCoords(const TileDefinition& def, std::mt19937& rng) {
+      glm::ivec2 atlasBase = def.atlasBase;
+      if (def.variationCount > 1) {
+         std::uniform_int_distribution<int> dist(0, def.variationCount - 1);
+         atlasBase.y += dist(rng);
       }
       return static_cast<glm::vec2>(atlasBase);
    }

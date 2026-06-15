@@ -2,6 +2,12 @@
 
 #include "planet.hpp"
 #include "platform/input.hpp"
+
+#include <limits>
+#include <memory>
+#include <utility>
+#include <vector>
+
 class WorldView {
 private:
    enum class Mode : uint8_t {
@@ -31,13 +37,8 @@ public:
    }
 
    void handleInput(const Input& input, const std::vector<std::unique_ptr<Planet>>& planets, glm::ivec2 windowSize) {
-      if (input.isKeyDown(GLFW_KEY_TAB)) {
-         if (!tabWasDown) {
-            toggleFocusMode(planets);
-         }
-         tabWasDown = true;
-      } else {
-         tabWasDown = false;
+      if (input.isKeyPressed(GLFW_KEY_TAB)) {
+         toggleFocusMode(planets);
       }
 
       if (input.isDragging()) {
@@ -59,8 +60,10 @@ public:
    }
 
    void update(float dt, const std::vector<std::unique_ptr<Planet>>& planets) {
-      if (mode != Mode::Free && focusedPlanetIndex < planets.size()) {
-         targetState.offset = planets[focusedPlanetIndex]->getConfig().position;
+      if (mode != Mode::Free) {
+         if (const Planet* focused = focusedPlanet(planets)) {
+            targetState.offset = focused->getConfig().position;
+         }
       }
 
       if (mode == Mode::Locked) {
@@ -88,7 +91,7 @@ public:
 
    [[nodiscard]] Camera& getCamera() { return galaxyCamera; }
    [[nodiscard]] const Camera& getCamera() const { return galaxyCamera; }
-   [[nodiscard]] int getFocusedPlanetIndex() const { return static_cast<int>(focusedPlanetIndex); }
+   [[nodiscard]] int getFocusedPlanetIndex() const { return focusedPlanetIndex; }
 
 private:
    Camera galaxyCamera;
@@ -99,13 +102,17 @@ private:
    CameraState targetState;
    CameraState transitionStart;
 
-   size_t focusedPlanetIndex = -1;
-   bool tabWasDown = false;
+   int focusedPlanetIndex = -1;
 
    float savedGlobalScale = 0.5f;
    float savedPlanetScale = 1.0f;
 
    float transitionT = 0.0f;
+
+   [[nodiscard]] Planet* focusedPlanet(const std::vector<std::unique_ptr<Planet>>& planets) const {
+      const bool valid = focusedPlanetIndex >= 0 && std::cmp_less(focusedPlanetIndex, planets.size());
+      return valid ? planets[focusedPlanetIndex].get() : nullptr;
+   }
 
    void syncCameraToCurrent() {
       galaxyCamera.setOffset(currentState.offset);
@@ -145,20 +152,20 @@ private:
    }
 
    void applyDrag(glm::vec2 deltaPixels, const std::vector<std::unique_ptr<Planet>>& planets) {
-      if (mode == Mode::Locked && focusedPlanetIndex < planets.size()) {
-         auto& planet = planets[focusedPlanetIndex];
-         planet->localCamera.setScale(galaxyCamera.getScale());
-         planet->localCamera.pan(deltaPixels);
+      Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
+      if (focused) {
+         focused->localCamera.setScale(galaxyCamera.getScale());
+         focused->localCamera.pan(deltaPixels);
       } else {
          targetState.offset -= deltaPixels / currentState.scale;
       }
    }
 
    void applyKeyboardPan(glm::vec2 direction, const std::vector<std::unique_ptr<Planet>>& planets) {
-      if (mode == Mode::Locked && focusedPlanetIndex < planets.size()) {
-         auto& planet = planets[focusedPlanetIndex];
-         planet->localCamera.setScale(galaxyCamera.getScale());
-         planet->localCamera.pan(-direction);
+      Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
+      if (focused) {
+         focused->localCamera.setScale(galaxyCamera.getScale());
+         focused->localCamera.pan(-direction);
       } else {
          targetState.offset += direction / currentState.scale;
       }

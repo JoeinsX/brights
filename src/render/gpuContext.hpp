@@ -1,14 +1,21 @@
 #pragma once
 
 #include "GLFW/glfw3.h"
+#include "util/logger.hpp"
 
 #include <glfw3webgpu.h>
-#include <queue>
+#include <memory>
 #include <webgpu/webgpu.hpp>
+#include <webgpu/wgpu.h>
 
 class GpuContext {
 public:
+   static constexpr WGPUTextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+
    bool initialize(wgpu::Instance instance, GLFWwindow* window) {
+      wgpuSetLogLevel(WGPULogLevel_Warn);
+      wgpuSetLogCallback(onWgpuLog, nullptr);
+
       surface = glfwGetWGPUSurface(instance, window);
 
       wgpu::RequestAdapterOptions adapterOpts = {};
@@ -19,9 +26,17 @@ public:
          return false;
       }
 
-      const wgpu::DeviceDescriptor deviceDesc = {};
+      wgpu::DeviceDescriptor deviceDesc = {};
+      deviceDesc.deviceLostCallback = [](const WGPUDeviceLostReason reason, const char* message, void*) {
+         if (reason != WGPUDeviceLostReason_Destroyed) {
+            Log::critical("[wgpu] device lost: {}", message);
+         }
+      };
       device = adapter.requestDevice(deviceDesc);
       queue = device.getQueue();
+
+      errorCallbackHandle =
+         device.setUncapturedErrorCallback([](const wgpu::ErrorType type, const char* message) { Log::error("[wgpu] {} error: {}", errorTypeName(type), message); });
 
       glfwGetFramebufferSize(window, &currentWindowSize.x, &currentWindowSize.y);
 
@@ -98,13 +113,33 @@ public:
       if (device) {
          device.release();
       }
+      errorCallbackHandle.reset();
    }
 
-   wgpu::Device& getDevice() { return device; }
-   wgpu::Queue& getQueue() { return queue; }
-   wgpu::TextureFormat& getSurfaceFormat() { return surfaceFormat; }
+   [[nodiscard]] wgpu::Device getDevice() const { return device; }
+   [[nodiscard]] wgpu::Queue getQueue() const { return queue; }
+   [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return surfaceFormat; }
 
 private:
+   static void onWgpuLog(const WGPULogLevel level, const char* message, void*) {
+      switch (level) {
+      case WGPULogLevel_Error: Log::error("[wgpu] {}", message); break;
+      case WGPULogLevel_Warn:  Log::warn("[wgpu] {}", message); break;
+      case WGPULogLevel_Info:  Log::info("[wgpu] {}", message); break;
+      default:                 Log::debug("[wgpu] {}", message); break;
+      }
+   }
+
+   static constexpr std::string_view errorTypeName(const wgpu::ErrorType type) {
+      switch (type) {
+      case wgpu::ErrorType::Validation:  return "validation";
+      case wgpu::ErrorType::OutOfMemory: return "out-of-memory";
+      case wgpu::ErrorType::Internal:    return "internal";
+      case wgpu::ErrorType::DeviceLost:  return "device-lost";
+      default:                           return "unknown";
+      }
+   }
+
    void createDepthTexture(const glm::ivec2& size) {
       if (depthTexture) {
          depthTexture.destroy();
@@ -116,13 +151,13 @@ private:
 
       wgpu::TextureDescriptor depthTextureDesc;
       depthTextureDesc.dimension = wgpu::TextureDimension::_2D;
-      depthTextureDesc.format = wgpu::TextureFormat::Depth24Plus;
+      depthTextureDesc.format = depthTextureFormat;
       depthTextureDesc.mipLevelCount = 1;
       depthTextureDesc.sampleCount = 1;
       depthTextureDesc.size = {static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y), 1};
       depthTextureDesc.usage = wgpu::TextureUsage::RenderAttachment;
       depthTextureDesc.viewFormatCount = 1;
-      depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureDesc.format;
+      depthTextureDesc.viewFormats = &depthTextureDesc.format;
 
       depthTexture = device.createTexture(depthTextureDesc);
 
@@ -133,7 +168,7 @@ private:
       depthTextureViewDesc.baseMipLevel = 0;
       depthTextureViewDesc.mipLevelCount = 1;
       depthTextureViewDesc.dimension = wgpu::TextureViewDimension::_2D;
-      depthTextureViewDesc.format = wgpu::TextureFormat::Depth24Plus;
+      depthTextureViewDesc.format = depthTextureFormat;
 
       depthTextureView = depthTexture.createView(depthTextureViewDesc);
    }
@@ -146,6 +181,8 @@ private:
 
    wgpu::Texture depthTexture = nullptr;
    wgpu::TextureView depthTextureView = nullptr;
+
+   std::unique_ptr<wgpu::ErrorCallback> errorCallbackHandle;
 
    glm::ivec2 currentWindowSize{};
 };

@@ -2,10 +2,15 @@
 
 #include <atomic>
 #include <chrono>
+#include <exception>
 #include <format>
 #include <iostream>
 #include <source_location>
 #include <string_view>
+#include <type_traits>
+#include <utility>
+
+struct LoggerConfig;
 
 class Log {
 public:
@@ -17,80 +22,141 @@ public:
       Error,
       Critical,
       Fatal,
-      Off
+      Off,
+      Default
    };
 
-private:
-   struct LevelConfig {
-      std::string_view Label;
-      bool ShowLocation;
+   template<typename... Args>
+   struct Message {
+      std::format_string<Args...> fmt;
+      std::source_location loc;
+
+      template<typename S>
+      // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
+      consteval Message(const S& fmt, const std::source_location loc = std::source_location::current()): fmt(fmt), loc(loc) {}
    };
 
-   static constexpr LevelConfig getConfig(Level level) {
-      switch (level) {
-      case Level::Trace:    return {"TRACE", true};
-      case Level::Debug:    return {"DEBUG", true};
-      case Level::Info:     return {"INFO ", true};
-      case Level::Warn:     return {"WARN ", true};
-      case Level::Error:    return {"ERROR", true};
-      case Level::Critical: return {"CRIT ", true};
-      case Level::Fatal:    return {"FATAL", true};
-      default:              return {"UNKNOWN", true};
-      }
-   }
-
-   static inline std::atomic<Level> s_MinLevel{Level::Trace};
-
-public:
-   static void setLevel(Level level) { s_MinLevel.store(level); }
+   static void setLevels(const LoggerConfig& next, const std::source_location loc = std::source_location::current());
 
    template<typename... Args>
-   static void trace(std::format_string<Args...> fmt, Args&&... args) {
-      logImpl<Level::Trace>(fmt, std::forward<Args>(args)...);
+   static void trace(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Trace, msg, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
-   static void info(std::format_string<Args...> fmt, Args&&... args) {
-      logImpl<Level::Info>(fmt, std::forward<Args>(args)...);
+   static void debug(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Debug, msg, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
-   static void warn(std::format_string<Args...> fmt, Args&&... args) {
-      logImpl<Level::Warn>(fmt, std::forward<Args>(args)...);
+   static void info(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Info, msg, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
-   static void error(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
-      logImpl<Level::Error>(fmt, std::forward<Args>(args)..., loc);
+   static void warn(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Warn, msg, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
-   static void critical(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
-      LogImpl<Level::Critical>(fmt, std::forward<Args>(args)..., loc);
+   static void error(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Error, msg, std::forward<Args>(args)...);
    }
 
    template<typename... Args>
-   static void fatal(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
-      logImpl<Level::Fatal>(fmt, std::forward<Args>(args)..., loc);
+   static void critical(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Critical, msg, std::forward<Args>(args)...);
+   }
+
+   template<typename... Args>
+   static void fatal(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
+      write(Level::Fatal, msg, std::forward<Args>(args)...);
    }
 
 private:
-   template<Level L, typename... Args>
-   static void logImpl(std::format_string<Args...> fmt, Args&&... args, const std::source_location& loc = std::source_location::current()) {
-      if (L < s_MinLevel.load()) {
+   template<typename... Args>
+   static void write(const Level level, const Message<Args...>& msg, Args&&... args) {
+      if (level < writeLevel.load(std::memory_order_relaxed)) {
          return;
       }
 
-      constexpr LevelConfig Config = getConfig(L);
+      const std::string text = std::format(msg.fmt, std::forward<Args>(args)...);
+      emit(label(level), text, msg.loc, level >= showLocationLevel.load(std::memory_order_relaxed), level >= flushLevel.load(std::memory_order_relaxed));
 
-      const auto now = std::chrono::system_clock::now();
-
-      std::string message = std::format(fmt, std::forward<Args>(args)...);
-
-      if constexpr (Config.ShowLocation) {
-         std::clog << std::format("[{:%T}] [{}] {} [at {}:{}]\n", now, Config.Label, message, loc.file_name(), loc.line());
-      } else {
-         std::clog << std::format("[{:%T}] [{}] {}\n", now, Config.Label, message);
+      if (level >= panicLevel.load(std::memory_order_relaxed)) {
+         panic();
       }
    }
+
+   static void emit(const std::string_view tag, const std::string_view text, const std::source_location loc, const bool showLocation, const bool flush) {
+      const auto now = std::chrono::system_clock::now();
+
+      if (showLocation) {
+         std::string_view file = loc.file_name();
+         file.remove_prefix(file.find_last_of("/\\") + 1);
+         std::clog << std::format("[{:%T}] [{:5}] {} [at {}:{}]\n", now, tag, text, file, loc.line());
+      } else {
+         std::clog << std::format("[{:%T}] [{:5}] {}\n", now, tag, text);
+      }
+
+      if (flush) {
+         std::clog.flush();
+      }
+   }
+
+   [[noreturn]] static void panic() {
+      std::clog.flush();
+#ifdef LOG_PANIC_HANG
+      while (true) {
+      }
+#else
+      std::terminate();
+#endif
+   }
+
+   static constexpr std::string_view label(const Level level) {
+      switch (level) {
+      case Level::Trace:    return "TRACE";
+      case Level::Debug:    return "DEBUG";
+      case Level::Info:     return "INFO";
+      case Level::Warn:     return "WARN";
+      case Level::Error:    return "ERROR";
+      case Level::Critical: return "CRIT";
+      case Level::Fatal:    return "FATAL";
+      case Level::Off:      return "OFF";
+      default:              return "?????";
+      }
+   }
+
+   static inline std::atomic<Level> writeLevel{Level::Trace};
+   static inline std::atomic<Level> showLocationLevel{Level::Trace};
+   static inline std::atomic<Level> flushLevel{Level::Error};
+   static inline std::atomic<Level> panicLevel{Level::Off};
 };
+
+struct LoggerConfig {
+   Log::Level writeLevel{Log::Level::Default};
+   Log::Level showLocationLevel{Log::Level::Default};
+   Log::Level flushLevel{Log::Level::Default};
+   Log::Level panicLevel{Log::Level::Default};
+};
+
+inline void Log::setLevels(const LoggerConfig& next, const std::source_location loc) {
+   if (next.writeLevel != Level::Default) {
+      writeLevel.store(next.writeLevel, std::memory_order_relaxed);
+   }
+   if (next.showLocationLevel != Level::Default) {
+      showLocationLevel.store(next.showLocationLevel, std::memory_order_relaxed);
+   }
+   if (next.flushLevel != Level::Default) {
+      flushLevel.store(next.flushLevel, std::memory_order_relaxed);
+   }
+   if (next.panicLevel != Level::Default) {
+      panicLevel.store(next.panicLevel, std::memory_order_relaxed);
+   }
+
+   const std::string summary = std::
+      format("policy changed -> write={} loc={} flush={} panic={}, flushing", label(writeLevel.load(std::memory_order_relaxed)),
+             label(showLocationLevel.load(std::memory_order_relaxed)), label(flushLevel.load(std::memory_order_relaxed)), label(panicLevel.load(std::memory_order_relaxed)));
+   emit("logger-meta", summary, loc, true, true);
+}

@@ -1,27 +1,24 @@
 #pragma once
 
-#include "core/graphics/camera.hpp"
+#include "config.hpp"
 #include "game.hpp"
-#include "glm/gtx/vector_query.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
 #include "render/graphicsContext.hpp"
-#include "render/wgslPreprocessor.hpp"
 #include "util/logger.hpp"
 
 #include <chrono>
 #include <glm/glm.hpp>
-#include <map>
-#include <random>
 #include <string>
 #include <webgpu/webgpu.hpp>
 
 class Application {
 public:
    bool initialize() {
-      Log::setLevel(Log::Level::Info);
+      const Config config = Config::load();
+      Log::setLevels(config.loggerSection);
 
-      if (!window.initialize(640, 480, "Brights: WebGPU", this)) {
+      if (!window.initialize(config.windowSection, "Brights: WebGPU", this)) {
          return false;
       }
 
@@ -32,7 +29,9 @@ public:
 
       window.setCallbacks(onFramebufferResize, onCursorPos, onMouseButton, onScroll, onKey);
 
-      game.initialize(&gameGraphics, gpuContext, ctx.getQueue());
+      if (!game.initialize(&gameGraphics, gpuContext, ctx.getQueue())) {
+         return false;
+      }
 
       update(0.0f);
 
@@ -44,7 +43,9 @@ public:
    }
 
    void terminate() {
+      game.terminate();
       gameGraphics.terminate();
+      gpuContext.terminate();
       if (instance) {
          instance.release();
       }

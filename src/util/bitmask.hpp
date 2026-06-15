@@ -1,75 +1,50 @@
 #pragma once
-#include <type_traits>
+#include <utility>
 
 template<typename T>
 struct EnableBitMaskOperators {
    static constexpr bool enable = false;
 };
 
-namespace detail {
-   template<typename E>
-   using underlying = std::underlying_type_t<E>;
-
-   template<typename E, typename ReturnType = E>
-   using EnableIf = std::enable_if_t<EnableBitMaskOperators<E>::enable, ReturnType>;
-
-   template<typename E>
-   constexpr E doOr(E lhs, E rhs) {
-      return static_cast<E>(static_cast<underlying<E>>(lhs) | static_cast<underlying<E>>(rhs));
-   }
-
-   template<typename E>
-   constexpr E doAnd(E lhs, E rhs) {
-      return static_cast<E>(static_cast<underlying<E>>(lhs) & static_cast<underlying<E>>(rhs));
-   }
-
-   template<typename E>
-   constexpr E doXor(E lhs, E rhs) {
-      return static_cast<E>(static_cast<underlying<E>>(lhs) ^ static_cast<underlying<E>>(rhs));
-   }
-
-   template<typename E>
-   constexpr E doNot(E val) {
-      return static_cast<E>(~static_cast<underlying<E>>(val));
-   }
-}   // namespace detail
-
 template<typename E>
-constexpr detail::EnableIf<E> operator |(E lhs, E rhs) {
-   return detail::doOr(lhs, rhs);
+concept BitmaskEnum = EnableBitMaskOperators<E>::enable;
+
+template<BitmaskEnum E>
+constexpr E operator |(E lhs, E rhs) {
+   return static_cast<E>(std::to_underlying(lhs) | std::to_underlying(rhs));
 }
 
-template<typename E>
-constexpr detail::EnableIf<E, E&> operator |=(E& lhs, E rhs) {
-   lhs = detail::doOr(lhs, rhs);
+template<BitmaskEnum E>
+constexpr E& operator |=(E& lhs, E rhs) {
+   lhs = lhs | rhs;
    return lhs;
 }
 
-template<typename E>
-constexpr detail::EnableIf<E> operator &(E lhs, E rhs) {
-   return detail::doAnd(lhs, rhs);
+template<BitmaskEnum E>
+constexpr E operator &(E lhs, E rhs) {
+   return static_cast<E>(std::to_underlying(lhs) & std::to_underlying(rhs));
 }
 
-template<typename E>
-constexpr detail::EnableIf<E, E&> operator &=(E& lhs, E rhs) {
-   lhs = detail::doAnd(lhs, rhs);
+template<BitmaskEnum E>
+constexpr E& operator &=(E& lhs, E rhs) {
+   lhs = lhs & rhs;
    return lhs;
 }
 
-template<typename E>
-constexpr detail::EnableIf<E> operator ^(E lhs, E rhs) {
-   return detail::doXor(lhs, rhs);
+template<BitmaskEnum E>
+constexpr E operator ^(E lhs, E rhs) {
+   return static_cast<E>(std::to_underlying(lhs) ^ std::to_underlying(rhs));
 }
 
-template<typename E>
-constexpr detail::EnableIf<E, E&> operator ^=(E& lhs, E rhs) {
-   lhs = detail::doXor(lhs, rhs);
+template<BitmaskEnum E>
+constexpr E& operator ^=(E& lhs, E rhs) {
+   lhs = lhs ^ rhs;
    return lhs;
 }
 
-template<typename E>
-constexpr detail::EnableIf<E> operator ~(E val) {
-   return detail::doNot(val);
+template<BitmaskEnum E>
+constexpr E operator ~(E val) {
+   return static_cast<E>(~std::to_underlying(val));
 }
 
 #define ENABLE_BITMASK_OPERATORS(T)        \

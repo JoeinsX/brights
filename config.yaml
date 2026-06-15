@@ -1,0 +1,9 @@
+window:
+  position: [ 640, 480 ]
+  size: [ 640, 480 ]
+
+logger:
+  writeLevel: Info
+  showLocationLevel: Trace
+  flushLevel: Error
+  panicLevel: Off

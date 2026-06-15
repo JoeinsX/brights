@@ -1,12 +1,9 @@
 #pragma once
 
-#include "core/resources/resource.hpp"
 #include "core/world/chunk.hpp"
 #include "core/world/planet.hpp"
 #include "platform/window.hpp"
-#include "render/gpuBuffer.hpp"
 #include "render/gpuHelpers.hpp"
-#include "render/gpuTexture.hpp"
 #include "render/graphicsContext.hpp"
 
 #include <vector>
@@ -24,13 +21,10 @@ class GameGraphics {
 public:
    void initialize(GraphicsContext& ctx) {
       wgpu::Device device = ctx.getDevice();
-      wgpu::Queue queue = ctx.getQueue();
 
-      const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint8_t);
-      const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED_EX) * sizeof(uint16_t);
+      const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint8_t);
+      const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint16_t);
       const uint64_t uniformSize = sizeof(UniformData);
-
-      atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/atlas.png"));
 
       std::vector<wgpu::BindGroupLayoutEntry> layoutEntries(ShaderSlots::Num);
       layoutEntries[ShaderSlots::Uniforms] = WGPUHelpers::
@@ -72,12 +66,9 @@ public:
       if (pipeline) {
          pipeline.release();
       }
-
-      atlasTexture.destroy();
    }
 
    [[nodiscard]] wgpu::BindGroupLayout getBindGroupLayout() const { return bindGroupLayout; }
-   [[nodiscard]] const GpuTexture& getAtlas() const { return atlasTexture; }
 
 private:
    void createPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, std::vector<wgpu::BindGroupLayoutEntry>& layoutEntries, wgpu::ShaderModule& shaderModule) {
@@ -124,9 +115,7 @@ private:
 
       depthStencilState.depthCompare = wgpu::CompareFunction::Less;
       depthStencilState.depthWriteEnabled = true;
-
-      const wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-      depthStencilState.format = depthTextureFormat;
+      depthStencilState.format = GpuContext::depthTextureFormat;
 
       depthStencilState.stencilReadMask = 0;
       depthStencilState.stencilWriteMask = 0;
@@ -140,6 +129,4 @@ private:
 
    wgpu::BindGroupLayout bindGroupLayout = nullptr;
    wgpu::RenderPipeline pipeline = nullptr;
-   ResourceManager resourceManager;
-   GpuTexture atlasTexture;
 };
