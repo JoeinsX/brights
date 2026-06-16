@@ -78,22 +78,22 @@ public:
 
 private:
    void initializeGameContent() {
-      registry.registerTile(TileID::Grass, 0, 0, 4, 1.0);
-      registry.registerTile(TileID::Water, 1, 0, 4, 0.6);
-      registry.registerTile(TileID::ColdGrass, 2, 0, 4, 1.0);
-      registry.registerTile(TileID::Stone, 3, 0, 4, 1.8, 0.4);
-      registry.registerTile(TileID::HardStone, 4, 0, 4, 1.8, 0.4);
-      registry.registerTile(TileID::Sand, 5, 0, 4, 0.8);
-      registry.registerTile(TileID::ColdWater, 6, 0, 4, 0.7);
-      registry.registerTile(TileID::Ice, 7, 0, 4, 0.8);
-      registry.registerTile(TileID::Snow, 8, 0, 4, 1.0, 0.5);
-      registry.registerTile(TileID::RedOre, 9, 0, 1, 1.6);
-      registry.registerTile(TileID::BlueOre, 10, 0, 1, 1.6);
-      registry.registerTile(TileID::BurntGround, 11, 0, 1, 0.7);
-      registry.registerTile(TileID::Gravel, 12, 0, 1, 1.0, 0.7);
-      registry.registerTile(TileID::HardGravel, 13, 0, 1, 1.0);
-      registry.registerTile(TileID::Planks, 14, 0, 1, 1.8, 0.0);
-      registry.registerTile(TileID::PlankFloor, 15, 0, 1, 1.0);
+      registry.registerTile(TileID::Grass, 0, 0, 4);
+      registry.registerTile(TileID::Water, 1, 0, 4);
+      registry.registerTile(TileID::ColdGrass, 2, 0, 4);
+      registry.registerTile(TileID::Stone, 3, 0, 4, 0.4f);
+      registry.registerTile(TileID::HardStone, 4, 0, 4, 0.4f);
+      registry.registerTile(TileID::Sand, 5, 0, 4);
+      registry.registerTile(TileID::ColdWater, 6, 0, 4);
+      registry.registerTile(TileID::Ice, 7, 0, 4);
+      registry.registerTile(TileID::Snow, 8, 0, 4, 0.5f);
+      registry.registerTile(TileID::RedOre, 9, 0, 1);
+      registry.registerTile(TileID::BlueOre, 10, 0, 1);
+      registry.registerTile(TileID::BurntGround, 11, 0, 1);
+      registry.registerTile(TileID::Gravel, 12, 0, 1, 0.7f);
+      registry.registerTile(TileID::HardGravel, 13, 0, 1);
+      registry.registerTile(TileID::Planks, 14, 0, 1, 0.0f);
+      registry.registerTile(TileID::PlankFloor, 15, 0, 1);
    }
 
    ResourceManager resourceManager;

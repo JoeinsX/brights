@@ -4,7 +4,7 @@
 #include "core/world/world.hpp"
 #include "core/world/worldRenderAdapter.hpp"
 #include "render/gpuBuffer.hpp"
-#include "render/gpuHelpers.hpp"   // For binding helpers
+#include "render/gpuHelpers.hpp"
 #include "render/gpuTexture.hpp"
 
 #include <cmath>
@@ -106,6 +106,12 @@ public:
    [[nodiscard]] wgpu::BindGroup getBindGroup() const { return renderData.bindGroup; }
    [[nodiscard]] const PlanetConfig& getConfig() const { return config; }
 
+   [[nodiscard]] float getPlanetRadius() const { return config.baseSize * 0.5f; }
+
+   [[nodiscard]] float getPixelsPerTile(float cameraScale) const { return cameraScale * getPlanetRadius() / centerTileStretch; }
+
+   [[nodiscard]] float getFocusScaleForPixelsPerTile(float targetPixelsPerTile) const { return targetPixelsPerTile * centerTileStretch / getPlanetRadius(); }
+
    void terminate() {
       if (renderData.bindGroup) {
          renderData.bindGroup.release();
@@ -119,6 +125,10 @@ public:
    Camera localCamera{};
 
 private:
+   static constexpr float mapTileSpan = static_cast<float>(Chunk::SIZE * Chunk::COUNT);
+   static constexpr float sphereTileCoverage = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT);
+   static constexpr float centerTileStretch = 0.25f * mapTileSpan * sphereTileCoverage;
+
    void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth) {
       static constexpr float baseResolutionX = 640.f;
       static constexpr float baseResolutionY = 480.f;
@@ -139,12 +149,12 @@ private:
                               .centerOffset = centerOffset,
                               .res = res,
                               .scale = globalCamera.getScale(),
-                              .sphereMapScale = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT),
+                              .sphereMapScale = sphereTileCoverage,
                               .chunkOffset = chunkMove,
                               .resScale = res / glm::vec2{baseResolutionX, baseResolutionY},
                               .perspectiveStrength = perspectiveStrength,
                               .perspectiveScale = perspectiveStrength / basePerspectiveStrength,
-                              .planetRadius = config.baseSize / 2.0f,
+                              .planetRadius = getPlanetRadius(),
                               .planetDepth = depth,
                               ._pad = {0.0f, 0.0f}};
 

@@ -34,44 +34,49 @@ fn computeEdgeCuts(edgeDists: vec4f, centerH: f32, softness: f32, nb: TileNeighb
     return EdgeCut(cuts, dX, dY, hX, hY);
 }
 
+fn applyCornerHeight(uv: vec2f, corner: vec2f, diagH: f32, centerH: f32, softness: f32, edgeBlend: f32, bestDepth: ptr<function, f32>, height: f32) -> f32 {
+    if (diagH >= centerH) { return height; }
+    let d = softness - length(uv - corner);
+    if (d <= 0.0) { return height; }
+    let cornerH = mix(centerH, diagH, smoothstep(0.0, 1.0, d / softness));
+
+    if (d > *bestDepth) {
+        *bestDepth = d;
+        return cornerH;
+    }
+
+    return mix(height, cornerH, edgeBlend);
+}
+
 fn getSmoothedHeightNeighborhood(worldPos: vec2f, nh: TileNeighborhood) -> f32 {
     let centerH = nh.tiles[0].height;
     if (centerH <= 0.01) { return 0.0; }
 
     let uv = fract(worldPos);
-    let softness = nh.tiles[0].softness;
+    let rawSoftness = nh.tiles[0].softness;
+    let softness = select(rawSoftness, 0.02, rawSoftness < 0.001);
     let edgeDists = vec4f(uv.x, 1.0 - uv.x, uv.y, 1.0 - uv.y);
 
     if (all(edgeDists >= vec4f(softness))) { return centerH; }
 
     let ec = computeEdgeCuts(edgeDists, centerH, softness, nh);
 
-    var dist = length(vec2f(ec.dX, ec.dY));
-    var targetH = centerH;
-    if (dist > 0.0001) {
-        targetH = (ec.hX * ec.dX + ec.hY * ec.dY) / (ec.dX + ec.dY);
-    }
+    let sX = smoothstep(0.0, 1.0, ec.dX / softness);
+    let sY = smoothstep(0.0, 1.0, ec.dY / softness);
+    let dropX = centerH - ec.hX;
+    let dropY = centerH - ec.hY;
+    var bestDepth = length(vec2f(ec.dX, ec.dY));
+    var height = centerH - dropX * sX - dropY * sY + min(dropX, dropY) * sX * sY;
 
-    if (nh.tiles[5].height < centerH) {
-        let d = softness - length(uv);
-        if (d > dist) { dist = d; targetH = nh.tiles[5].height; }
-    }
-    if (nh.tiles[3].height < centerH) {
-        let d = softness - length(uv - vec2f(1.0, 0.0));
-        if (d > dist) { dist = d; targetH = nh.tiles[3].height; }
-    }
-    if (nh.tiles[7].height < centerH) {
-        let d = softness - length(uv - vec2f(0.0, 1.0));
-        if (d > dist) { dist = d; targetH = nh.tiles[7].height; }
-    }
-    if (nh.tiles[1].height < centerH) {
-        let d = softness - length(uv - vec2f(1.0, 1.0));
-        if (d > dist) { dist = d; targetH = nh.tiles[1].height; }
-    }
+    let sL = smoothstep(0.0, 1.0, ec.cuts.x / softness);
+    let sR = smoothstep(0.0, 1.0, ec.cuts.y / softness);
+    let sU = smoothstep(0.0, 1.0, ec.cuts.z / softness);
+    let sD = smoothstep(0.0, 1.0, ec.cuts.w / softness);
 
-    if (dist <= 0.0) { return centerH; }
+    height = applyCornerHeight(uv, vec2f(0.0, 0.0), nh.tiles[5].height, centerH, softness, sL * sU, &bestDepth, height);
+    height = applyCornerHeight(uv, vec2f(1.0, 0.0), nh.tiles[3].height, centerH, softness, sR * sU, &bestDepth, height);
+    height = applyCornerHeight(uv, vec2f(0.0, 1.0), nh.tiles[7].height, centerH, softness, sL * sD, &bestDepth, height);
+    height = applyCornerHeight(uv, vec2f(1.0, 1.0), nh.tiles[1].height, centerH, softness, sR * sD, &bestDepth, height);
 
-    let t = clamp(dist / softness, 0.0, 1.0);
-    let profile = smoothstep(1.0, 0.0, t);
-    return mix(targetH, centerH, profile);
+    return height;
 }

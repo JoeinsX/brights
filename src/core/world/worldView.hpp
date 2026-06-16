@@ -3,6 +3,7 @@
 #include "planet.hpp"
 #include "platform/input.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -23,11 +24,13 @@ private:
 
 public:
    struct Config {
-      float minScale = 0.1f;
+      float minScale = 0.1f;   // galaxy-view zoom range
       float maxScale = 86.0f;
       float zoomStep = 1.1f;
       float baseLerpSpeed = 8.0f;
       float focusDurationMs = 900.0f;
+      float focusMinPixelsPerTile = 1.5f;     // focused zoom-out limit: planet roughly fills the view
+      float focusMaxPixelsPerTile = 128.0f;   // focused zoom-in limit: one tile spans this many pixels
    };
 
    WorldView() {
@@ -55,7 +58,7 @@ public:
       const float scrollY = input.getScrollDelta().y;
       if (scrollY != 0.0f) {
          const float zoomDir = (scrollY > 0) ? 1.0f : -1.0f;
-         applyZoom(zoomDir, input.getMousePosition(), windowSize);
+         applyZoom(zoomDir, input.getMousePosition(), windowSize, planets);
       }
    }
 
@@ -105,7 +108,7 @@ private:
    int focusedPlanetIndex = -1;
 
    float savedGlobalScale = 0.5f;
-   float savedPlanetScale = 1.0f;
+   float savedFocusPixelsPerTile = 2.0f;
 
    float transitionT = 0.0f;
 
@@ -121,11 +124,13 @@ private:
 
    void toggleFocusMode(const std::vector<std::unique_ptr<Planet>>& planets) {
       if (mode != Mode::Free) {
-         savedPlanetScale = targetState.scale;
+         if (const Planet* focused = focusedPlanet(planets)) {
+            savedFocusPixelsPerTile = focused->getPixelsPerTile(targetState.scale);
+         }
          mode = Mode::Free;
          focusedPlanetIndex = -1;
 
-         targetState.scale = std::min(savedGlobalScale, targetState.scale);
+         targetState.scale = savedGlobalScale;
       } else {
          float minDist = std::numeric_limits<float>::max();
          int closest = -1;
@@ -146,7 +151,8 @@ private:
             transitionStart = currentState;
             transitionT = 0.0f;
 
-            targetState.scale = std::max(savedPlanetScale, targetState.scale);
+            const float ppt = std::clamp(savedFocusPixelsPerTile, config.focusMinPixelsPerTile, config.focusMaxPixelsPerTile);
+            targetState.scale = planets[closest]->getFocusScaleForPixelsPerTile(ppt);
          }
       }
    }
@@ -154,7 +160,7 @@ private:
    void applyDrag(glm::vec2 deltaPixels, const std::vector<std::unique_ptr<Planet>>& planets) {
       Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
       if (focused) {
-         focused->localCamera.setScale(galaxyCamera.getScale());
+         focused->localCamera.setScale(focused->getPixelsPerTile(galaxyCamera.getScale()));
          focused->localCamera.pan(deltaPixels);
       } else {
          targetState.offset -= deltaPixels / currentState.scale;
@@ -164,22 +170,30 @@ private:
    void applyKeyboardPan(glm::vec2 direction, const std::vector<std::unique_ptr<Planet>>& planets) {
       Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
       if (focused) {
-         focused->localCamera.setScale(galaxyCamera.getScale());
+         focused->localCamera.setScale(focused->getPixelsPerTile(galaxyCamera.getScale()));
          focused->localCamera.pan(-direction);
       } else {
          targetState.offset += direction / currentState.scale;
       }
    }
 
-   void applyZoom(float direction, glm::vec2 mousePos, glm::ivec2 windowSize) {
+   void applyZoom(float direction, glm::vec2 mousePos, glm::ivec2 windowSize, const std::vector<std::unique_ptr<Planet>>& planets) {
       const float zoomFactor = (direction > 0) ? config.zoomStep : (1.0f / config.zoomStep);
-      const float newScale = std::clamp(targetState.scale * zoomFactor, config.minScale, config.maxScale);
+
+      float minScale = config.minScale;
+      float maxScale = config.maxScale;
+      if (const Planet* focused = mode != Mode::Free ? focusedPlanet(planets) : nullptr) {
+         minScale = focused->getFocusScaleForPixelsPerTile(config.focusMinPixelsPerTile);
+         maxScale = focused->getFocusScaleForPixelsPerTile(config.focusMaxPixelsPerTile);
+      }
+
+      const float newScale = std::clamp(targetState.scale * zoomFactor, minScale, maxScale);
 
       if (std::abs(newScale - targetState.scale) < 0.0001f) {
          return;
       }
 
-      if (mode == Mode::Locked) {
+      if (mode != Mode::Free) {
          targetState.scale = newScale;
       } else {
          const glm::vec2 halfScreen = glm::vec2(windowSize) * 0.5f;

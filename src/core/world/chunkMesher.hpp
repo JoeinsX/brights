@@ -69,19 +69,19 @@ private:
             const int bufferRowOffset = (y + 1) * PADDED_SIZE + 1;
 
             for (int x = 0; x < CHUNK_SIZE; ++x) {
-               const TileID tID = centerChunk.terrainMap[centerRowOffset + x];
-               const TileDefinition& def = registry.get(tID);
+               const int idx = centerRowOffset + x;
+               const TileID tID = centerChunk.terrainMap[idx];
 
-               buffer[bufferRowOffset + x] = {def.height, def.softness, tID};
+               buffer[bufferRowOffset + x] = {centerChunk.heightMap[idx], registry.get(tID).softness, tID};
             }
          }
 
          auto copyTile = [&](int nIndex, int srcX, int srcY, int destX, int destY) {
             if (const auto& chunk = neighbors[nIndex]) {
-               const TileID id = chunk->terrainMap[srcY * CHUNK_SIZE + srcX];
-               const TileDefinition& def = registry.get(id);
+               const int idx = srcY * CHUNK_SIZE + srcX;
+               const TileID id = chunk->terrainMap[idx];
 
-               buffer[destY * PADDED_SIZE + destX] = {def.height, def.softness, id};
+               buffer[destY * PADDED_SIZE + destX] = {chunk->heightMap[idx], registry.get(id).softness, id};
             } else {
                buffer[destY * PADDED_SIZE + destX] = {0.0f, 0.0f, TileID::Air};
             }

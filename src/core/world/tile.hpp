@@ -27,14 +27,13 @@ enum class TileID : uint8_t {
 struct TileDefinition {
    glm::ivec2 atlasBase{};
    int variationCount = 1;
-   float height = 0.0f;
    float softness = 0.0f;
 };
 
 class TileRegistry {
 public:
-   void registerTile(const TileID id, const int x, const int y, const int variations, const float height = 0.5f, const float softness = 0.5f) {
-      defs[static_cast<size_t>(id)] = {{x, y}, variations, height, softness};
+   void registerTile(const TileID id, const int x, const int y, const int variations, const float softness = 0.5f) {
+      defs[static_cast<size_t>(id)] = {{x, y}, variations, softness};
    }
 
    [[nodiscard]] const TileDefinition& get(const TileID id) const { return defs[static_cast<size_t>(id)]; }

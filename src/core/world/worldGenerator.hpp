@@ -3,6 +3,7 @@
 #include "FastNoise/FastNoise.h"
 #include "chunk.hpp"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -71,6 +72,25 @@ private:
 
 public:
    explicit WorldGenerator(const uint64_t seed): seed(seed) {}
+
+   static float computeTerrainHeight(const float elevation, const TileID terrain) {
+      bool isWater = terrain == TileID::Water || terrain == TileID::ColdWater || terrain == TileID::Ice;
+      if (isWater) return 0.5f;
+
+      float e = std::clamp(elevation, 0.0f, 1.0f);
+
+      float height;
+      if (e < 0.7f) {
+         height = 0.6f + e * 0.5f;
+      } else {
+         height = 1.2f + (e - 0.7f) * 2.0f;
+      }
+
+      if (terrain == TileID::Planks) height += 0.8f;
+      if (terrain == TileID::RedOre || terrain == TileID::BlueOre) height += 0.4f;
+
+      return std::clamp(height, 0.0f, 2.0f);
+   }
 
    void generate(Chunk& chunk) {
       const auto& ctx = getContext();
@@ -191,7 +211,7 @@ public:
                }
             }
 
-            chunk.setTerrain(x, y, terrain);
+            chunk.setTerrain(x, y, terrain, computeTerrainHeight(h, terrain));
          }
       }
    }
