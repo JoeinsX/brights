@@ -113,6 +113,8 @@ target_copy_webgpu_binaries(brights)
 add_custom_target(
         CopyAssets
         COMMAND
+        ${CMAKE_COMMAND} -E rm -rf "${CMAKE_BINARY_DIR}/assets"
+        COMMAND
         ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets"
         "${CMAKE_BINARY_DIR}/assets"
         COMMENT "Copying assets folder to binary directory..."
