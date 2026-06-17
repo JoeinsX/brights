@@ -19,6 +19,21 @@ namespace ShaderSlots {
 
 class GameGraphics {
 public:
+   GameGraphics() = default;
+   GameGraphics(const GameGraphics&) = delete;
+   GameGraphics(GameGraphics&&) = delete;
+   GameGraphics& operator=(const GameGraphics&) = delete;
+   GameGraphics& operator=(GameGraphics&&) = delete;
+
+   ~GameGraphics() {
+      if (bindGroupLayout) {
+         bindGroupLayout.release();
+      }
+      if (pipeline) {
+         pipeline.release();
+      }
+   }
+
    void initialize(GraphicsContext& ctx) {
       wgpu::Device device = ctx.getDevice();
 
@@ -40,31 +55,12 @@ public:
       createPipeline(device, ctx.getSurfaceFormat(), layoutEntries, shaderModule);
    }
 
-   void render(GraphicsContext& ctx, Window& window, const std::vector<std::unique_ptr<Planet>>& planets) {
-      if (!ctx.beginFrame(window)) {
-         return;
-      }
-
-      wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
-
+   void draw(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
       pass.setPipeline(pipeline);
 
       for (const auto& planet : planets) {
          pass.setBindGroup(0, planet->getBindGroup(), 0, nullptr);
          pass.draw(6, 1, 0, 0);
-      }
-
-      pass.end();
-      pass.release();
-      ctx.endFrame();
-   }
-
-   void terminate() {
-      if (bindGroupLayout) {
-         bindGroupLayout.release();
-      }
-      if (pipeline) {
-         pipeline.release();
       }
    }
 
@@ -85,12 +81,12 @@ private:
       wgpu::RenderPipelineDescriptor pipelineDesc;
       pipelineDesc.layout = pipelineLayout;
       pipelineDesc.vertex.module = shaderModule;
-      pipelineDesc.vertex.entryPoint = "vs_main";
+      pipelineDesc.vertex.entryPoint = wgpu::StringView("vs_main");
       pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
 
       wgpu::FragmentState fragmentState;
       fragmentState.module = shaderModule;
-      fragmentState.entryPoint = "fs_main";
+      fragmentState.entryPoint = wgpu::StringView("fs_main");
 
       wgpu::ColorTargetState colorTarget;
       colorTarget.format = surfaceFormat;
@@ -114,7 +110,7 @@ private:
       wgpu::DepthStencilState depthStencilState = wgpu::Default;
 
       depthStencilState.depthCompare = wgpu::CompareFunction::Less;
-      depthStencilState.depthWriteEnabled = true;
+      depthStencilState.depthWriteEnabled = wgpu::OptionalBool::True;
       depthStencilState.format = GpuContext::depthTextureFormat;
 
       depthStencilState.stencilReadMask = 0;

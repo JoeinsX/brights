@@ -2,7 +2,7 @@
 #include <webgpu/webgpu.hpp>
 
 namespace WGPUHelpers {
-   inline wgpu::BindGroupLayoutEntry bufferEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility, const wgpu::BufferBindingType type, const uint64_t minSize = 0) {
+   inline wgpu::BindGroupLayoutEntry bufferEntry(const uint32_t binding, const wgpu::ShaderStage visibility, const wgpu::BufferBindingType type, const uint64_t minSize = 0) {
       wgpu::BindGroupLayoutEntry entry = {};
       entry.binding = binding;
       entry.visibility = visibility;
@@ -11,7 +11,7 @@ namespace WGPUHelpers {
       return entry;
    }
 
-   inline wgpu::BindGroupLayoutEntry textureEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility,
+   inline wgpu::BindGroupLayoutEntry textureEntry(const uint32_t binding, const wgpu::ShaderStage visibility,
                                                   const wgpu::TextureSampleType sampleType = wgpu::TextureSampleType::Float,
                                                   const wgpu::TextureViewDimension viewDimension = wgpu::TextureViewDimension::_2D) {
       wgpu::BindGroupLayoutEntry entry = {};
@@ -22,7 +22,7 @@ namespace WGPUHelpers {
       return entry;
    }
 
-   inline wgpu::BindGroupLayoutEntry samplerEntry(const uint32_t binding, const wgpu::ShaderStageFlags visibility,
+   inline wgpu::BindGroupLayoutEntry samplerEntry(const uint32_t binding, const wgpu::ShaderStage visibility,
                                                   const wgpu::SamplerBindingType type = wgpu::SamplerBindingType::Filtering) {
       wgpu::BindGroupLayoutEntry entry = {};
       entry.binding = binding;

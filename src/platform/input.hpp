@@ -1,8 +1,9 @@
 #pragma once
 
-#include "GLFW/glfw3.h"
+#include "event.hpp"
 
 #include <array>
+#include <cstddef>
 #include <glm/glm.hpp>
 
 class Input {
@@ -13,55 +14,48 @@ public:
       keysPressed.fill(false);
    }
 
-   [[nodiscard]] bool isKeyDown(const int key) const { return isValidKey(key) && keysDown[key]; }
-
-   [[nodiscard]] bool isKeyPressed(const int key) const { return isValidKey(key) && keysPressed[key]; }
+   [[nodiscard]] bool isKeyDown(const Key key) const { return key != Key::Count && keysDown[index(key)]; }
+   [[nodiscard]] bool isKeyPressed(const Key key) const { return key != Key::Count && keysPressed[index(key)]; }
 
    [[nodiscard]] bool isDragging() const { return dragging; }
    [[nodiscard]] glm::vec2 getMousePosition() const { return mousePos; }
    [[nodiscard]] glm::vec2 getMouseDelta() const { return mouseDelta; }
    [[nodiscard]] glm::vec2 getScrollDelta() const { return scrollDelta; }
 
-   void onKey(const int key, const int action) {
-      if (!isValidKey(key)) {
+   void onKey(const Key key, const bool pressed) {
+      if (key == Key::Count) {
          return;
       }
-      if (action == GLFW_PRESS) {
-         keysDown[key] = true;
-         keysPressed[key] = true;
-      } else if (action == GLFW_RELEASE) {
-         keysDown[key] = false;
+      keysDown[index(key)] = pressed;
+      if (pressed) {
+         keysPressed[index(key)] = true;
       }
    }
 
-   void onMouseButton(const int button, const int action, const double xpos, const double ypos) {
-      if (button == GLFW_MOUSE_BUTTON_LEFT) {
-         if (action == GLFW_PRESS) {
-            dragging = true;
-            lastMousePos = {static_cast<float>(xpos), static_cast<float>(ypos)};
-         } else if (action == GLFW_RELEASE) {
-            dragging = false;
+   void onMouseButton(const MouseButton button, const bool pressed, const glm::vec2 position) {
+      if (button == MouseButton::Left) {
+         dragging = pressed;
+         if (pressed) {
+            lastMousePos = position;
          }
       }
    }
 
-   void onCursorPos(double xpos, double ypos) {
-      const glm::vec2 currentPos = {static_cast<float>(xpos), static_cast<float>(ypos)};
-      mousePos = currentPos;
-
+   void onMouseMove(const glm::vec2 position) {
+      mousePos = position;
       if (dragging) {
-         mouseDelta += (currentPos - lastMousePos);
+         mouseDelta += (position - lastMousePos);
       }
-      lastMousePos = currentPos;
+      lastMousePos = position;
    }
 
-   void onScroll(double xoffset, double yoffset) { scrollDelta += glm::vec2(static_cast<float>(xoffset), static_cast<float>(yoffset)); }
+   void onScroll(const glm::vec2 delta) { scrollDelta += delta; }
 
 private:
-   static bool isValidKey(const int key) { return key >= 0 && key <= GLFW_KEY_LAST; }
+   static constexpr size_t index(const Key key) { return static_cast<size_t>(key); }
 
-   std::array<bool, GLFW_KEY_LAST + 1> keysDown{};
-   std::array<bool, GLFW_KEY_LAST + 1> keysPressed{};
+   std::array<bool, static_cast<size_t>(Key::Count)> keysDown{};
+   std::array<bool, static_cast<size_t>(Key::Count)> keysPressed{};
 
    glm::vec2 mousePos{0.0f};
    glm::vec2 lastMousePos{0.0f};

@@ -80,12 +80,12 @@ public:
 
 private:
    void uploadWithMipmaps(wgpu::Queue& queue, const ImageResource& image, const wgpu::TextureDescriptor& textureDesc) {
-      wgpu::ImageCopyTexture destination;
+      wgpu::TexelCopyTextureInfo destination;
       destination.texture = texture;
       destination.origin = {0, 0, 0};
       destination.aspect = wgpu::TextureAspect::All;
 
-      wgpu::TextureDataLayout source;
+      wgpu::TexelCopyBufferLayout source;
       source.offset = 0;
 
       wgpu::Extent3D mipLevelSize = textureDesc.size;
@@ -114,7 +114,7 @@ private:
                   p[3] = srcData[srcIdx + 3];
                } else {
                   const uint32_t prevStride = 4 * prevMipLevelSize.width;
-                  // Sampling 2x2 block from previous level
+                  // sampling 2x2 block from previous level
                   const uint8_t* p00 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 0)];
                   const uint8_t* p01 = &prevLevelPixels[prevStride * (2 * j + 0) + 4 * (2 * i + 1)];
                   const uint8_t* p10 = &prevLevelPixels[prevStride * (2 * j + 1) + 4 * (2 * i + 0)];

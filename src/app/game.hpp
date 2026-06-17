@@ -21,6 +21,11 @@ class Game {
 public:
    Game(): threadPool(std::clamp(std::thread::hardware_concurrency() - 1, 1u, 4u)) {}
 
+   ~Game() {
+      threadPool.shutdown();
+      planets.clear();
+   }
+
    [[nodiscard]] bool initialize(GameGraphics* _graphicsCtx, GpuContext& gpuContext, wgpu::Queue _queue) {
       graphicsCtx = _graphicsCtx;
       queue = _queue;
@@ -69,12 +74,6 @@ public:
    }
 
    [[nodiscard]] const std::vector<std::unique_ptr<Planet>>& getPlanets() const { return planets; }
-
-   void terminate() {
-      threadPool.shutdown();
-      planets.clear();
-      atlasTexture.destroy();
-   }
 
 private:
    void initializeGameContent() {

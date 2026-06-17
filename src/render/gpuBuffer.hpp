@@ -11,13 +11,15 @@ public:
 
    ~GpuBuffer() { destroy(); }
 
-   void init(wgpu::Device& device, const uint64_t byteSize, const wgpu::BufferUsageFlags usage, const char* label = nullptr) {
+   void init(wgpu::Device& device, const uint64_t byteSize, const wgpu::BufferUsage usage, const char* label = nullptr) {
       destroy();
       size = byteSize;
       wgpu::BufferDescriptor desc;
       desc.usage = usage;
       desc.size = size;
-      desc.label = label;
+      if (label) {
+         desc.label = wgpu::StringView(label);
+      }
       buffer = device.createBuffer(desc);
    }
 

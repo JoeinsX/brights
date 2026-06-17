@@ -1,6 +1,7 @@
 #pragma once
 
 #include "planet.hpp"
+#include "platform/event.hpp"
 #include "platform/input.hpp"
 
 #include <algorithm>
@@ -24,13 +25,13 @@ private:
 
 public:
    struct Config {
-      float minScale = 0.1f;   // galaxy-view zoom range
+      float minScale = 0.1f;
       float maxScale = 86.0f;
       float zoomStep = 1.1f;
       float baseLerpSpeed = 8.0f;
       float focusDurationMs = 900.0f;
-      float focusMinPixelsPerTile = 1.5f;     // focused zoom-out limit: planet roughly fills the view
-      float focusMaxPixelsPerTile = 128.0f;   // focused zoom-in limit: one tile spans this many pixels
+      float focusMinPixelsPerTile = 1.5f;
+      float focusMaxPixelsPerTile = 128.0f;
    };
 
    WorldView() {
@@ -40,7 +41,7 @@ public:
    }
 
    void handleInput(const Input& input, const std::vector<std::unique_ptr<Planet>>& planets, glm::ivec2 windowSize) {
-      if (input.isKeyPressed(GLFW_KEY_TAB)) {
+      if (input.isKeyPressed(Key::Tab)) {
          toggleFocusMode(planets);
       }
 
@@ -48,8 +49,8 @@ public:
          applyDrag(input.getMouseDelta(), planets);
       }
 
-      const auto keyInput = glm::vec2(static_cast<float>(input.isKeyDown(GLFW_KEY_D)) - static_cast<float>(input.isKeyDown(GLFW_KEY_A)),
-                                      static_cast<float>(input.isKeyDown(GLFW_KEY_S)) - static_cast<float>(input.isKeyDown(GLFW_KEY_W)));
+      const auto keyInput = glm::vec2(static_cast<float>(input.isKeyDown(Key::D)) - static_cast<float>(input.isKeyDown(Key::A)),
+                                      static_cast<float>(input.isKeyDown(Key::S)) - static_cast<float>(input.isKeyDown(Key::W)));
 
       if (glm::length(keyInput) > 0.1f) {
          applyKeyboardPan(glm::normalize(keyInput) * 10.0f, planets);

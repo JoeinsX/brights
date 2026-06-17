@@ -13,7 +13,6 @@ class WGSLPreprocessor {
 public:
    void addDefine(const std::string& name) { defines.insert(name); }
 
-   // Register a directory searched for includes that are not found next to the including file.
    void addIncludeRoot(const std::filesystem::path& root) { includeRoots.push_back(root); }
 
    [[nodiscard]] std::string load(const std::filesystem::path& path) const {
@@ -25,7 +24,6 @@ private:
    std::set<std::string> defines;
    std::vector<std::filesystem::path> includeRoots;
 
-   // Resolve an #include relative to the including file first, then each registered root.
    [[nodiscard]] std::filesystem::path resolveInclude(const std::filesystem::path& fromDir, const std::string& rel) const {
       const std::filesystem::path local = fromDir / rel;
       if (std::filesystem::exists(local)) {

@@ -9,6 +9,5 @@ int main() {
    while (app.isRunning()) {
       app.mainLoop();
    }
-   app.terminate();
    return 0;
 }

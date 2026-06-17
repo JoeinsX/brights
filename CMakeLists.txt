@@ -59,14 +59,14 @@ FetchContent_MakeAvailable(glfw)
 FetchContent_Declare(
         glfw3webgpu
         GIT_REPOSITORY https://github.com/eliemichel/glfw3webgpu.git
-        GIT_TAG v1.2.0
+        GIT_TAG v1.3.0-alpha
 )
 FetchContent_MakeAvailable(glfw3webgpu)
 
 FetchContent_Declare(
         webgpu
         GIT_REPOSITORY https://github.com/eliemichel/WebGPU-distribution.git
-        GIT_TAG wgpu-v0.19.4.1
+        GIT_TAG wgpu-v24.0.0.2
 )
 FetchContent_MakeAvailable(webgpu)
 
@@ -92,6 +92,29 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
+FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG v1.91.9
+)
+FetchContent_MakeAvailable(imgui)
+
+add_library(
+        imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_wgpu.cpp
+)
+target_include_directories(
+        imgui
+        PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends
+)
+target_compile_definitions(imgui PUBLIC IMGUI_IMPL_WEBGPU_BACKEND_WGPU)
+target_link_libraries(imgui PUBLIC glfw webgpu)
+
 add_library(stbWrp INTERFACE)
 target_include_directories(stbWrp INTERFACE ${stb_SOURCE_DIR})
 
@@ -105,7 +128,7 @@ target_compile_definitions(
 
 target_link_libraries(
         brights
-        PRIVATE webgpu glfw glfw3webgpu FastNoise2 stbWrp glm yaml-cpp
+        PRIVATE webgpu glfw glfw3webgpu FastNoise2 stbWrp glm yaml-cpp imgui
 )
 
 target_copy_webgpu_binaries(brights)

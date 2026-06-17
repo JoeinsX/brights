@@ -1,8 +1,8 @@
 #pragma once
 
+#include "util/wgslPreprocessor.hpp"
 #include "GLFW/glfw3.h"
 #include "gpuContext.hpp"
-#include "wgslPreprocessor.hpp"
 
 #include <filesystem>
 #include <string>
@@ -30,6 +30,7 @@ public:
    wgpu::RenderPassEncoder beginRenderPass(const wgpu::Color& clearColor) {
       wgpu::RenderPassColorAttachment attachment = {};
       attachment.view = currentTextureView;
+      attachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
       attachment.loadOp = wgpu::LoadOp::Clear;
       attachment.storeOp = wgpu::StoreOp::Store;
       attachment.clearValue = clearColor;
@@ -82,9 +83,9 @@ public:
       preprocessor.addIncludeRoot(shaderCodePath.parent_path().parent_path());   // shaders root, so modules can #include "lib/..." directly
       const std::string code = preprocessor.load(shaderCodePath);
 
-      wgpu::ShaderModuleWGSLDescriptor shaderCodeDesc;
-      shaderCodeDesc.chain.sType = wgpu::SType::ShaderModuleWGSLDescriptor;
-      shaderCodeDesc.code = code.c_str();
+      wgpu::ShaderSourceWGSL shaderCodeDesc;
+      shaderCodeDesc.chain.sType = wgpu::SType::ShaderSourceWGSL;
+      shaderCodeDesc.code = wgpu::StringView(code);
       wgpu::ShaderModuleDescriptor shaderDesc;
       shaderDesc.nextInChain = &shaderCodeDesc.chain;
 

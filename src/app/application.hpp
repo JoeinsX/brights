@@ -2,14 +2,16 @@
 
 #include "config.hpp"
 #include "game.hpp"
+#include "platform/event.hpp"
 #include "platform/input.hpp"
 #include "platform/window.hpp"
 #include "render/graphicsContext.hpp"
+#include "ui/gui.hpp"
 #include "util/logger.hpp"
 
 #include <chrono>
-#include <glm/glm.hpp>
 #include <string>
+#include <variant>
 #include <webgpu/webgpu.hpp>
 
 class Application {
@@ -18,16 +20,15 @@ public:
       const Config config = Config::load();
       Log::setLevels(config.loggerSection);
 
-      if (!window.initialize(config.windowSection, "Brights: WebGPU", this)) {
+      if (!window.initialize(config.windowSection, "Brights: WebGPU")) {
          return false;
       }
 
-      instance = wgpuCreateInstance(nullptr);
-      gpuContext.initialize(instance, window.handle);
+      gpuContext.initialize(window);
       ctx.initialize(&gpuContext);
       gameGraphics.initialize(ctx);
 
-      window.setCallbacks(onFramebufferResize, onCursorPos, onMouseButton, onScroll, onKey);
+      ui.initialize(window, gpuContext.getDevice(), ctx.getSurfaceFormat());
 
       if (!game.initialize(&gameGraphics, gpuContext, ctx.getQueue())) {
          return false;
@@ -42,20 +43,12 @@ public:
       return true;
    }
 
-   void terminate() {
-      game.terminate();
-      gameGraphics.terminate();
-      gpuContext.terminate();
-      if (instance) {
-         instance.release();
-      }
-      window.terminate();
-   }
-
    void mainLoop() {
       input.reset();
-
-      Window::pollEvents();
+      window.pollEvents();
+      for (const Event& event : window.events()) {
+         manageEvent(event);
+      }
 
       frameCount++;
       auto currentTime = std::chrono::steady_clock::now();
@@ -67,77 +60,76 @@ public:
       auto elapsedFpsMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTime).count();
 
       if (elapsedFpsMs >= 1000) {
-         const std::string title = "Brights: WebGPU - FPS: " + std::to_string(frameCount);
-         glfwSetWindowTitle(window.handle, title.c_str());
+         lastFps = frameCount;
+         window.setTitle("Brights: WebGPU - FPS: " + std::to_string(lastFps));
          frameCount = 0;
          lastFpsTime = currentTime;
       }
 
       update(dtMs);
 
-      gameGraphics.render(ctx, window, game.getPlanets());
+      renderFrame();
    }
 
    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
 
 private:
-   void update(float dt) {
-      glm::ivec2 windowSize{};
-      glfwGetFramebufferSize(window.handle, &windowSize.x, &windowSize.y);
+   void update(float dt) { game.update(dt, input, window.framebufferSize()); }
 
-      game.update(dt, input, windowSize);
+   void renderFrame() {
+      if (!ctx.beginFrame(window)) {
+         return;
+      }
+
+      ui.beginFrame();
+
+      const wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
+      gameGraphics.draw(pass, game.getPlanets());
+      ui.render(pass);
+      pass.end();
+      pass.release();
+
+      ctx.endFrame();
    }
 
-   static void onFramebufferResize(GLFWwindow* window, int /*newWidth*/, int /*newHeight*/) {
-      const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      if (app && app->continuousResize) {
-         app->update(0.0f);
-         app->gameGraphics.render(app->ctx, app->window, app->game.getPlanets());
-      }
+   void manageEvent(const Event& event) {
+      std::visit([this](const auto& e) { handleEvent(e); }, event);
    }
 
-   static void onCursorPos(GLFWwindow* window, double xpos, double ypos) {
-      const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      if (app) {
-         app->input.onCursorPos(xpos, ypos);
+   void handleEvent(const MouseMoved& e) { input.onMouseMove(e.position); }
+
+   void handleEvent(const MouseButtonEvent& e) {
+      if (e.pressed && ui.consumeMouse()) {
+         return;
       }
+      input.onMouseButton(e.button, e.pressed, e.position);
    }
 
-   static void onMouseButton(GLFWwindow* window, int button, int action, int /*mods*/) {
-      const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      double x{}, y{};
-      glfwGetCursorPos(window, &x, &y);
-      if (app) {
-         app->input.onMouseButton(button, action, x, y);
+   void handleEvent(const Scrolled& e) {
+      if (ui.consumeMouse()) {
+         return;
       }
+      input.onScroll(e.delta);
    }
 
-   static void onKey(GLFWwindow* window, int key, int /*scancode*/, const int action, int /*mods*/) {
-      auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      if (app) {
-         app->input.onKey(key, action);
+   void handleEvent(const KeyEvent& e) {
+      if (ui.consumeKeyboard()) {
+         return;
       }
-   }
-
-   static void onScroll(GLFWwindow* window, double xoffset, double yoffset) {
-      const auto app = static_cast<Application*>(glfwGetWindowUserPointer(window));
-      if (app) {
-         app->input.onScroll(xoffset, yoffset);
-      }
+      input.onKey(e.key, e.pressed);
    }
 
    Window window;
    GpuContext gpuContext;
    GraphicsContext ctx;
    GameGraphics gameGraphics;
-   wgpu::Instance instance = nullptr;
+   Gui ui;
 
    Input input;
    Game game;
 
-   bool continuousResize = false;
-
    std::chrono::steady_clock::time_point lastFrameTime;
    std::chrono::steady_clock::time_point lastFpsTime;
    int frameCount = 0;
+   int lastFps = 0;
 };

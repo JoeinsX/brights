@@ -101,7 +101,9 @@ public:
       adapter->update(localCamera, chunkMove);
    }
 
-   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth) { updateUniforms(windowSize, chunkMove, globalCamera, depth); }
+   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth) {
+      updateUniforms(windowSize, chunkMove, globalCamera, depth);
+   }
 
    [[nodiscard]] wgpu::BindGroup getBindGroup() const { return renderData.bindGroup; }
    [[nodiscard]] const PlanetConfig& getConfig() const { return config; }
@@ -133,7 +135,6 @@ private:
       static constexpr float baseResolutionX = 640.f;
       static constexpr float baseResolutionY = 480.f;
       static constexpr float basePerspectiveStrength = 0.002f;
-      static constexpr float perspectiveStrength = 0.002f;
 
       const glm::vec2 localOffset = localCamera.getOffset();
       const auto macroOffset = static_cast<glm::ivec2>(glm::floor(localOffset));
@@ -152,8 +153,8 @@ private:
                               .sphereMapScale = sphereTileCoverage,
                               .chunkOffset = chunkMove,
                               .resScale = res / glm::vec2{baseResolutionX, baseResolutionY},
-                              .perspectiveStrength = perspectiveStrength,
-                              .perspectiveScale = perspectiveStrength / basePerspectiveStrength,
+                              .perspectiveStrength = basePerspectiveStrength,
+                              .perspectiveScale = 1.0f,
                               .planetRadius = getPlanetRadius(),
                               .planetDepth = depth,
                               ._pad = {0.0f, 0.0f}};
