@@ -1,9 +1,11 @@
 #pragma once
 
+#include "core/settings.hpp"
 #include "platform/window.hpp"
 #include "util/logger.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <glm/glm.hpp>
 #include <string>
 #include <unordered_map>
@@ -12,9 +14,11 @@
 struct Config {
    WindowConfig windowSection;
    LoggerConfig loggerSection;
+   Settings settingsSection;
 
    static Config load(const std::filesystem::path& path = "config.yaml") {
       Config config;
+      config.configPath = path;
 
       YAML::Node root;
       try {
@@ -36,10 +40,52 @@ struct Config {
          config.loggerSection.panicLevel = readLevel(loggerNode["panicLevel"], config.loggerSection.panicLevel);
       }
 
+      if (const YAML::Node settingsNode = root["settings"]) {
+         loadSettings(settingsNode, config.settingsSection);
+      }
+
       return config;
    }
 
+   void save() const { save(configPath); }
+
+   void save(const std::filesystem::path& path) const {
+      YAML::Node root;
+      try {
+         root = YAML::LoadFile(path.string());
+      } catch (...) {}
+
+      YAML::Node sn;
+      sn["perspectiveStrength"] = settingsSection.perspectiveStrength;
+      sn["simpleModeThreshold"] = settingsSection.simpleModeThreshold;
+      sn["raymarchMaxTiles"] = settingsSection.raymarchMaxTiles;
+      sn["raymarchBinarySteps"] = settingsSection.raymarchBinarySteps;
+      sn["enableRaymarching"] = settingsSection.enableRaymarching;
+      sn["enableSoftMarch"] = settingsSection.enableSoftMarch;
+      sn["enableTriplanar"] = settingsSection.enableTriplanar;
+      sn["enableBlending"] = settingsSection.enableBlending;
+      root["settings"] = sn;
+
+      std::ofstream out(path);
+      if (out.is_open()) {
+         out << root;
+      }
+   }
+
+   std::filesystem::path configPath = "config.yaml";
+
 private:
+   static void loadSettings(const YAML::Node& node, Settings& s) {
+      if (node["perspectiveStrength"]) s.perspectiveStrength = node["perspectiveStrength"].as<float>();
+      if (node["simpleModeThreshold"]) s.simpleModeThreshold = node["simpleModeThreshold"].as<float>();
+      if (node["raymarchMaxTiles"]) s.raymarchMaxTiles = node["raymarchMaxTiles"].as<int>();
+      if (node["raymarchBinarySteps"]) s.raymarchBinarySteps = node["raymarchBinarySteps"].as<int>();
+      if (node["enableRaymarching"]) s.enableRaymarching = node["enableRaymarching"].as<bool>();
+      if (node["enableSoftMarch"]) s.enableSoftMarch = node["enableSoftMarch"].as<bool>();
+      if (node["enableTriplanar"]) s.enableTriplanar = node["enableTriplanar"].as<bool>();
+      if (node["enableBlending"]) s.enableBlending = node["enableBlending"].as<bool>();
+   }
+
    static glm::ivec2 readIVec2(const YAML::Node& node, const glm::ivec2 fallback) {
       if (node && node.IsSequence() && node.size() == 2) {
          return {node[0].as<int>(), node[1].as<int>()};

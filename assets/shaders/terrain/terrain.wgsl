@@ -29,13 +29,18 @@ fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
     let sphereRadius = u_config.planetRadius;
     let bias = min(0.006 / u_config.scale, 0.005);
 
-    let simpleModeActive = u_config.scale < simpleModeScaleThreshold;
-    let simpleModeSmoothCoefficient = smoothstep(0.0, 1.0, u_config.scale - simpleModeScaleThreshold);
+#ifndef ENABLE_RAYMARCHING
+    let simpleModeActive = true;
+    let simpleModeSmoothCoefficient = 0.0;
+#else
+    let simpleModeActive = u_config.scale < u_config.simpleModeThreshold;
+    let simpleModeSmoothCoefficient = smoothstep(0.0, 1.0, u_config.scale - u_config.simpleModeThreshold);
+#endif
     let perspectiveStrength = u_config.perspectiveStrength * simpleModeSmoothCoefficient;
     let perspectiveScale = u_config.perspectiveScale;
 
     var viewVec = (fragPos.xy - 0.5 * u_config.resolution) * perspectiveStrength / u_config.resolutionScale;
-    viewVec *= min(1.0, maxViewLean / max(length(viewVec), 0.00001));
+    viewVec *= min(1.0, 1.0 / max(length(viewVec), 0.00001));
 
     // project the screen pixel onto the planet sphere and find where it lands on the tile plane
     let p = ((screenPos / u_config.scale) + u_config.offset - viewCenter) / sphereRadius;
@@ -76,23 +81,42 @@ fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
     let localNormal = getAnalyticalNormalNeighborhood(rayPos.xy, nh);
     let rotatedNormal = normalize(tbn * localNormal);
 
+#ifndef ENABLE_TRIPLANAR
+    let triplanarActive = false;
+#else
+    let triplanarActive = nh.tiles[0].triplanar;
+#endif
+
+#ifndef ENABLE_BLENDING
+    let blendingActive = false;
+#else
+    let blendingActive = nh.tiles[0].blending;
+#endif
+
     var albedo: vec4f;
-    let blending = nh.tiles[0].blending;
-    if (nh.tiles[0].triplanar) {
-        if (blending) {
+    if (triplanarActive) {
+        if (blendingActive) {
             albedo = getBlendedTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, inset, nh);
         } else {
             albedo = getTriplanarColorNeighborhood(rayPos, localNormal, perspectiveScale, lod, inset, nh);
         }
     } else {
-        if (blending) {
+        if (blendingActive) {
             albedo = getBlendedColorNeighborhood(rayPos, lod, inset, nh);
         } else {
             albedo = getTerrainColor(rayPos.xy, lod, inset);
         }
     }
 
-    let lightDir = normalize(vec3f(-0.5, -0.8, 1.0));
-    let lit = applyDirectionalLight(albedo.rgb, rotatedNormal, lightDir, 0.4);
-    return vec4f(lit, albedo.a);
+    let lit = applyDirectionalLight(albedo.rgb, rotatedNormal, normalize(lightDir), ambientLight);
+    var color = vec4f(lit, albedo.a);
+
+#ifdef DEBUG_NORMAL
+    color = vec4f(rotatedNormal * 0.5 + 0.5, 1.0);
+#endif
+#ifdef DEBUG_HEIGHT
+    color = vec4f(vec3f(rayPos.z * 0.5), 1.0);
+#endif
+
+    return color;
 }

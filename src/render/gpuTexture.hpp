@@ -29,6 +29,11 @@ public:
       textureDesc.mipLevelCount = mipLevelCount;
       textureDesc.sampleCount = 1;
       textureDesc.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+
+      const WGPUTextureFormat aliasFormat = wgpu::TextureFormat::RGBA8Unorm;
+      textureDesc.viewFormatCount = 1;
+      textureDesc.viewFormats = &aliasFormat;
+
       texture = device.createTexture(textureDesc);
 
       uploadWithMipmaps(queue, image, textureDesc);
@@ -39,6 +44,10 @@ public:
       viewDesc.mipLevelCount = textureDesc.mipLevelCount;
       viewDesc.arrayLayerCount = 1;
       view = texture.createView(viewDesc);
+
+      wgpu::TextureViewDescriptor rawViewDesc = viewDesc;
+      rawViewDesc.format = aliasFormat;
+      rawView = texture.createView(rawViewDesc);
 
       wgpu::SamplerDescriptor samplerDesc = {};
       samplerDesc.addressModeU = wgpu::AddressMode::ClampToEdge;
@@ -65,6 +74,10 @@ public:
          view.release();
          view = nullptr;
       }
+      if (rawView) {
+         rawView.release();
+         rawView = nullptr;
+      }
       if (texture) {
          texture.destroy();
          texture.release();
@@ -75,6 +88,8 @@ public:
    [[nodiscard]] const wgpu::Texture& getTexture() const { return texture; }
 
    [[nodiscard]] const wgpu::TextureView& getView() const { return view; }
+
+   [[nodiscard]] const wgpu::TextureView& getRawView() const { return rawView; }
 
    [[nodiscard]] const wgpu::Sampler& getSampler() const { return sampler; }
 
@@ -149,5 +164,6 @@ private:
 
    wgpu::Texture texture = nullptr;
    wgpu::TextureView view = nullptr;
+   wgpu::TextureView rawView = nullptr;
    wgpu::Sampler sampler = nullptr;
 };

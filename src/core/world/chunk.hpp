@@ -27,6 +27,9 @@ public:
       heightMap[idx] = height;
    }
 
+   [[nodiscard]] TileID terrainAt(const int x, const int y) const { return terrainMap[y * SIZE + x]; }
+   [[nodiscard]] float heightAt(const int x, const int y) const { return heightMap[y * SIZE + x]; }
+
    [[nodiscard]] glm::ivec2 getPos() const { return pos; }
 
    [[nodiscard]] bool isMeshed() const { return meshed; }

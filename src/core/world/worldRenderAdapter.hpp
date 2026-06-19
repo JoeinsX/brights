@@ -41,6 +41,14 @@ public:
 
    uint16_t* getPackedDataPtrForChunk(const glm::ivec2 chunkPos) { return packedChunkMaps.data() + mapChunkPosToBufferIndex(chunkPos, Chunk::COUNT / 2) * Chunk::SIZE_SQUARED; }
 
+   [[nodiscard]] uint8_t getDisplayAt(const glm::ivec2 chunkPos, const int localIndex) const {
+      return displayChunkMaps[mapChunkPosToBufferIndex(chunkPos, Chunk::COUNT / 2) * Chunk::SIZE_SQUARED + localIndex];
+   }
+
+   [[nodiscard]] uint16_t getPackedAt(const glm::ivec2 chunkPos, const int localIndex) const {
+      return packedChunkMaps[mapChunkPosToBufferIndex(chunkPos, Chunk::COUNT / 2) * Chunk::SIZE_SQUARED + localIndex];
+   }
+
 private:
    // ReSharper disable once CppDFAConstantParameter
    static uint32_t mapChunkPosToBufferIndex(const glm::ivec2 chunkPos, const uint32_t localBufferRadiusChunks) {

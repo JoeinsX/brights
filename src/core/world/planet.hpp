@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/graphics/camera.hpp"
+#include "core/settings.hpp"
 #include "core/world/world.hpp"
+#include "core/world/worldEdit.hpp"
 #include "core/world/worldRenderAdapter.hpp"
 #include "render/gpuBuffer.hpp"
 #include "render/gpuHelpers.hpp"
@@ -9,6 +11,7 @@
 
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <webgpu/webgpu.hpp>
 
 struct UniformData {
@@ -24,7 +27,10 @@ struct UniformData {
    float perspectiveScale;
    float planetRadius;
    float planetDepth;
-   glm::vec2 _pad;
+   float simpleModeThreshold;
+   int32_t raymarchMaxTiles;
+   int32_t raymarchBinarySteps;
+   float _pad;
 };
 
 struct PlanetConfig {
@@ -101,9 +107,28 @@ public:
       adapter->update(localCamera, chunkMove);
    }
 
-   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth) {
-      updateUniforms(windowSize, chunkMove, globalCamera, depth);
+   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth, const Settings& settings) { updateUniforms(windowSize, chunkMove, globalCamera, depth, settings); }
+
+   [[nodiscard]] std::optional<glm::ivec2> pickTile(const glm::vec2 screenPos, const Camera& globalCamera, const glm::ivec2 windowSize) const {
+      const glm::vec2 res = static_cast<glm::vec2>(windowSize);
+      const glm::vec2 globalDiff = globalCamera.getOffset() - config.position;
+      const float scale = globalCamera.getScale();
+
+      const glm::vec2 disk = (screenPos - 0.5f * res + globalDiff * scale) / (scale * getPlanetRadius());
+      const float distSq = glm::dot(disk, disk);
+      if (distSq > 1.0f) {
+         return std::nullopt;
+      }
+
+      const float z = std::sqrt(1.0f - distSq);
+      const glm::vec2 diskUv = disk / (1.0f + z) * 0.5f;
+      const glm::vec2 worldPos = localCamera.getOffset() + diskUv * mapTileSpan * sphereTileCoverage;
+      return static_cast<glm::ivec2>(glm::floor(worldPos)) + chunkMove * Chunk::SIZE;
    }
+
+   int applyBrush(const BrushSettings& brush, const glm::ivec2 worldTile, const float dtMs) { return world->applyBrush(worldTile, brush, dtMs); }
+
+   [[nodiscard]] TileInspection inspectTile(const glm::ivec2 worldTile) const { return world->inspect(worldTile); }
 
    [[nodiscard]] wgpu::BindGroup getBindGroup() const { return renderData.bindGroup; }
    [[nodiscard]] const PlanetConfig& getConfig() const { return config; }
@@ -131,10 +156,9 @@ private:
    static constexpr float sphereTileCoverage = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT);
    static constexpr float centerTileStretch = 0.25f * mapTileSpan * sphereTileCoverage;
 
-   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth) {
+   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth, const Settings& settings) {
       static constexpr float baseResolutionX = 640.f;
       static constexpr float baseResolutionY = 480.f;
-      static constexpr float basePerspectiveStrength = 0.002f;
 
       const glm::vec2 localOffset = localCamera.getOffset();
       const auto macroOffset = static_cast<glm::ivec2>(glm::floor(localOffset));
@@ -153,11 +177,14 @@ private:
                               .sphereMapScale = sphereTileCoverage,
                               .chunkOffset = chunkMove,
                               .resScale = res / glm::vec2{baseResolutionX, baseResolutionY},
-                              .perspectiveStrength = basePerspectiveStrength,
-                              .perspectiveScale = 1.0f,
+                              .perspectiveStrength = settings.perspectiveStrength,
+                              .perspectiveScale = settings.perspectiveStrength / 0.002f,
                               .planetRadius = getPlanetRadius(),
                               .planetDepth = depth,
-                              ._pad = {0.0f, 0.0f}};
+                              .simpleModeThreshold = settings.simpleModeThreshold,
+                              .raymarchMaxTiles = settings.raymarchMaxTiles,
+                              .raymarchBinarySteps = settings.raymarchBinarySteps,
+                              ._pad = 0.0f};
 
       queue.writeBuffer(renderData.uniformBuffer.getBuffer(), 0, &uData, sizeof(UniformData));
    }

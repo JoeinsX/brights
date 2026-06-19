@@ -15,16 +15,7 @@ enum class AnalysisFlag : uint8_t {
    HasVariance = 1 << 1
 };
 
-enum class RenderFlag : uint8_t {
-   None = 0,
-   Triplanar = 1 << 0,
-   Blending = 1 << 1,
-   AdvancedRaymarching = 1 << 2,
-   SkipRaymarching = 1 << 3
-};
-
 ENABLE_BITMASK_OPERATORS(AnalysisFlag)
-ENABLE_BITMASK_OPERATORS(RenderFlag)
 
 class ChunkMesher {
 private:

@@ -11,6 +11,10 @@ struct Uniforms {
     perspectiveScale: f32,
     planetRadius: f32,
     planetDepth: f32,
+    simpleModeThreshold: f32,
+    raymarchMaxTiles: i32,
+    raymarchBinarySteps: i32,
+    _pad: f32,
 };
 
 @group(0) @binding(0) var<uniform> u_config: Uniforms;

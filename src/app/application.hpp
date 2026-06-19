@@ -1,12 +1,16 @@
 #pragma once
 
 #include "config.hpp"
+#include "core/settings.hpp"
 #include "game.hpp"
-#include "platform/event.hpp"
-#include "platform/input.hpp"
+#include "input/event.hpp"
+#include "input/input.hpp"
 #include "platform/window.hpp"
 #include "render/graphicsContext.hpp"
 #include "ui/gui.hpp"
+#include "ui/settingsPanel.hpp"
+#include "ui/tileInspectorPanel.hpp"
+#include "ui/worldEditPanel.hpp"
 #include "util/logger.hpp"
 
 #include <chrono>
@@ -16,9 +20,15 @@
 
 class Application {
 public:
+   ~Application() {
+      config.settingsSection = settings;
+      config.save();
+   }
+
    bool initialize() {
-      const Config config = Config::load();
+      config = Config::load();
       Log::setLevels(config.loggerSection);
+      settings = config.settingsSection;
 
       if (!window.initialize(config.windowSection, "Brights: WebGPU")) {
          return false;
@@ -26,7 +36,7 @@ public:
 
       gpuContext.initialize(window);
       ctx.initialize(&gpuContext);
-      gameGraphics.initialize(ctx);
+      gameGraphics.initialize(ctx, settings.getDefines());
 
       ui.initialize(window, gpuContext.getDevice(), ctx.getSurfaceFormat());
 
@@ -74,7 +84,13 @@ public:
    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
 
 private:
-   void update(float dt) { game.update(dt, input, window.framebufferSize()); }
+   void update(float dt) {
+      if (settings.featuresDirty) {
+         gameGraphics.rebuildPipeline(ctx, settings.getDefines());
+         settings.featuresDirty = false;
+      }
+      game.update(dt, input, window.framebufferSize(), settings, editPanel.settings());
+   }
 
    void renderFrame() {
       if (!ctx.beginFrame(window)) {
@@ -82,6 +98,9 @@ private:
       }
 
       ui.beginFrame();
+      settingsPanel.draw(settings);
+      editPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getEditStatus());
+      tileInspectorPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getTileInspection());
 
       const wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
       gameGraphics.draw(pass, game.getPlanets());
@@ -113,18 +132,36 @@ private:
    }
 
    void handleEvent(const KeyEvent& e) {
+      if (e.pressed && e.key == Key::F1) {
+         settingsPanel.toggle();
+         return;
+      }
+      if (e.pressed && e.key == Key::F2) {
+         editPanel.toggle();
+         return;
+      }
+      if (e.pressed && e.key == Key::F3) {
+         tileInspectorPanel.toggle();
+         return;
+      }
       if (ui.consumeKeyboard()) {
          return;
       }
       input.onKey(e.key, e.pressed);
    }
 
+   Config config;
+
    Window window;
    GpuContext gpuContext;
    GraphicsContext ctx;
    GameGraphics gameGraphics;
    Gui ui;
+   SettingsPanel settingsPanel;
+   WorldEditPanel editPanel;
+   TileInspectorPanel tileInspectorPanel;
 
+   Settings settings;
    Input input;
    Game game;
 

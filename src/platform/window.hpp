@@ -1,6 +1,6 @@
 #pragma once
 
-#include "event.hpp"
+#include "app/input/event.hpp"
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -63,7 +63,7 @@ public:
 
 private:
    void installCallbacks() {
-      glfwSetCursorPosCallback(handle, [](GLFWwindow* w, double x, double y) { queue(w).push_back(MouseMoved{{static_cast<float>(x), static_cast<float>(y)}}); });
+      glfwSetCursorPosCallback(handle, [](GLFWwindow* w, double x, double y) { accessEventQueue(w).push_back(MouseMoved{{static_cast<float>(x), static_cast<float>(y)}}); });
 
       glfwSetMouseButtonCallback(handle, [](GLFWwindow* w, int button, int action, int) {
          const MouseButton mapped = mapMouseButton(button);
@@ -72,21 +72,21 @@ private:
          }
          double x{}, y{};
          glfwGetCursorPos(w, &x, &y);
-         queue(w).push_back(MouseButtonEvent{mapped, action == GLFW_PRESS, {static_cast<float>(x), static_cast<float>(y)}});
+         accessEventQueue(w).push_back(MouseButtonEvent{mapped, action == GLFW_PRESS, {static_cast<float>(x), static_cast<float>(y)}});
       });
 
-      glfwSetScrollCallback(handle, [](GLFWwindow* w, double x, double y) { queue(w).push_back(Scrolled{{static_cast<float>(x), static_cast<float>(y)}}); });
+      glfwSetScrollCallback(handle, [](GLFWwindow* w, double x, double y) { accessEventQueue(w).push_back(Scrolled{{static_cast<float>(x), static_cast<float>(y)}}); });
 
       glfwSetKeyCallback(handle, [](GLFWwindow* w, int key, int, int action, int) {
          const Key mapped = mapKey(key);
          if (mapped == Key::Count || action == GLFW_REPEAT) {
             return;
          }
-         queue(w).push_back(KeyEvent{mapped, action == GLFW_PRESS});
+         accessEventQueue(w).push_back(KeyEvent{mapped, action == GLFW_PRESS});
       });
    }
 
-   static std::vector<Event>& queue(GLFWwindow* w) { return static_cast<Window*>(glfwGetWindowUserPointer(w))->eventQueue; }
+   static std::vector<Event>& accessEventQueue(GLFWwindow* w) { return static_cast<Window*>(glfwGetWindowUserPointer(w))->eventQueue; }
 
    static MouseButton mapMouseButton(const int button) {
       switch (button) {
@@ -104,6 +104,9 @@ private:
       case GLFW_KEY_S:   return Key::S;
       case GLFW_KEY_D:   return Key::D;
       case GLFW_KEY_TAB: return Key::Tab;
+      case GLFW_KEY_F1:  return Key::F1;
+      case GLFW_KEY_F2:  return Key::F2;
+      case GLFW_KEY_F3:  return Key::F3;
       default:           return Key::Count;
       }
    }

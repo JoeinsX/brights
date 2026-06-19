@@ -1,3 +1,4 @@
+#include "bindings.wgsl"
 #include "constants.wgsl"
 #include "tile.wgsl"
 #include "tilemap.wgsl"
@@ -10,8 +11,6 @@ struct TraceResult {
     nhValid: bool,
 };
 
-// march the ray against the height field. Below simpleModeScaleThreshold the surface is
-// flat enough to skip raymarching and just sample the smoothed height once
 fn traceTerrain(rayStart: vec3f, rayDir: vec3f, bias: f32, simpleModeActive: bool) -> TraceResult {
     var rayPos = rayStart;
     var hit = false;
@@ -31,10 +30,15 @@ fn traceTerrain(rayStart: vec3f, rayDir: vec3f, bias: f32, simpleModeActive: boo
     let invRayDir = 1.0 / rayDir;
 
     var center = fetchTileData(rayPos.xy);
-    for (var i = 0; i < raymarchMaxTiles; i++) {
+    for (var i = 0; i < u_config.raymarchMaxTiles; i++) {
         let tileMaxHeight = center.height;
         let tileSoftness = center.softness;
+
+#ifndef ENABLE_SOFT_MARCH
+        let tileIsHard = true;
+#else
         let tileIsHard = tileSoftness <= raymarchHardSoftnessThreshold || center.skipRaymarching;
+#endif
 
         let gridBorder = floor(rayPos.xy) + gridBorderOffset;
 
@@ -80,25 +84,7 @@ fn traceTerrain(rayStart: vec3f, rayDir: vec3f, bias: f32, simpleModeActive: boo
 
         let exitHeight = getSmoothedHeightNeighborhood(exitRayPos.xy, nh);
 
-        let steps = i32(sqrt(raymarchSoftStepBudget * max(0.0, 0.5 - tileSoftness)) * f32(center.advancedRaymarching));
-        let stepSize = exitTime / f32(steps + 1);
-        var marchedT = 0.0;
-        var foundHit = false;
-
-        for (var s = 0; s < steps; s++) {
-            marchedT += stepSize;
-            let testPos = rayPos + rayDir * marchedT;
-            let testPosC = clamp(testPos, min(rayPos, exitRayPos), max(rayPos, exitRayPos));
-            let h = getSmoothedHeightNeighborhood(testPosC.xy, nh);
-
-            if (testPos.z <= h) {
-                exitRayPos = testPos;
-                foundHit = true;
-                break;
-            }
-        }
-
-        if (exitHeight < exitRayPos.z && !foundHit) {
+        if (exitHeight < exitRayPos.z) {
             rayPos += rayDir * (exitTime2 + bias);
             center = fetchTileData(rayPos.xy);
             nhValid = false;
@@ -106,7 +92,7 @@ fn traceTerrain(rayStart: vec3f, rayDir: vec3f, bias: f32, simpleModeActive: boo
         }
 
         var currentRayPos = (rayPos + exitRayPos) / 2.0;
-        for (var j = 0; j < raymarchBinarySearchSteps; j++) {
+        for (var j = 0; j < u_config.raymarchBinarySteps; j++) {
             let currentHeight = getSmoothedHeightNeighborhood(currentRayPos.xy, nh);
             let prevCurrentRayPos = currentRayPos;
             if (currentRayPos.z > currentHeight) {

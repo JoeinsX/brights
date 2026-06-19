@@ -75,7 +75,9 @@ public:
 
    static float computeTerrainHeight(const float elevation, const TileID terrain) {
       bool isWater = terrain == TileID::Water || terrain == TileID::ColdWater || terrain == TileID::Ice;
-      if (isWater) return 0.5f;
+      if (isWater) {
+         return 0.5f;
+      }
 
       float e = std::clamp(elevation, 0.0f, 1.0f);
 
@@ -86,8 +88,12 @@ public:
          height = 1.2f + (e - 0.7f) * 2.0f;
       }
 
-      if (terrain == TileID::Planks) height += 0.8f;
-      if (terrain == TileID::RedOre || terrain == TileID::BlueOre) height += 0.4f;
+      if (terrain == TileID::Planks) {
+         height += 0.8f;
+      }
+      if (terrain == TileID::RedOre || terrain == TileID::BlueOre) {
+         height += 0.4f;
+      }
 
       return std::clamp(height, 0.0f, 2.0f);
    }

@@ -6,6 +6,8 @@
 #include "render/gpuHelpers.hpp"
 #include "render/graphicsContext.hpp"
 
+#include <set>
+#include <string>
 #include <vector>
 
 namespace ShaderSlots {
@@ -34,7 +36,7 @@ public:
       }
    }
 
-   void initialize(GraphicsContext& ctx) {
+   void initialize(GraphicsContext& ctx, const std::set<std::string>& defines = {}) {
       wgpu::Device device = ctx.getDevice();
 
       const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint8_t);
@@ -50,9 +52,22 @@ public:
       layoutEntries[ShaderSlots::PackedMap] = WGPUHelpers::
          bufferEntry(ShaderSlots::PackedMap, wgpu::ShaderStage::Fragment, wgpu::BufferBindingType::ReadOnlyStorage, packedMapSize);
 
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(device, "assets/shaders/terrain/terrain.wgsl");
+      wgpu::BindGroupLayoutDescriptor bglDesc;
+      bglDesc.entryCount = static_cast<uint32_t>(layoutEntries.size());
+      bglDesc.entries = layoutEntries.data();
+      bindGroupLayout = device.createBindGroupLayout(bglDesc);
 
-      createPipeline(device, ctx.getSurfaceFormat(), layoutEntries, shaderModule);
+      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(device, "assets/shaders/terrain/terrain.wgsl", defines);
+      buildRenderPipeline(device, ctx.getSurfaceFormat(), shaderModule);
+   }
+
+   void rebuildPipeline(GraphicsContext& ctx, const std::set<std::string>& defines) {
+      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(ctx.getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
+      if (pipeline) {
+         pipeline.release();
+         pipeline = nullptr;
+      }
+      buildRenderPipeline(ctx.getDevice(), ctx.getSurfaceFormat(), shaderModule);
    }
 
    void draw(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
@@ -67,12 +82,7 @@ public:
    [[nodiscard]] wgpu::BindGroupLayout getBindGroupLayout() const { return bindGroupLayout; }
 
 private:
-   void createPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, std::vector<wgpu::BindGroupLayoutEntry>& layoutEntries, wgpu::ShaderModule& shaderModule) {
-      wgpu::BindGroupLayoutDescriptor bglDesc;
-      bglDesc.entryCount = static_cast<uint32_t>(layoutEntries.size());
-      bglDesc.entries = layoutEntries.data();
-      bindGroupLayout = device.createBindGroupLayout(bglDesc);
-
+   void buildRenderPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, wgpu::ShaderModule& shaderModule) {
       wgpu::PipelineLayoutDescriptor layoutDesc;
       layoutDesc.bindGroupLayoutCount = 1;
       layoutDesc.bindGroupLayouts = reinterpret_cast<WGPUBindGroupLayout*>(&bindGroupLayout);

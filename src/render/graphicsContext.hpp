@@ -5,6 +5,7 @@
 #include "gpuContext.hpp"
 
 #include <filesystem>
+#include <set>
 #include <string>
 #include <webgpu/webgpu.hpp>
 
@@ -78,9 +79,13 @@ public:
    [[nodiscard]] wgpu::Queue getQueue() const { return gpu->getQueue(); }
    [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->getSurfaceFormat(); }
 
-   static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath) {
+   static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath,
+                                                  const std::set<std::string>& defines = {}) {
       WGSLPreprocessor preprocessor;
-      preprocessor.addIncludeRoot(shaderCodePath.parent_path().parent_path());   // shaders root, so modules can #include "lib/..." directly
+      preprocessor.addIncludeRoot(shaderCodePath.parent_path().parent_path());
+      for (const auto& def : defines) {
+         preprocessor.addDefine(def);
+      }
       const std::string code = preprocessor.load(shaderCodePath);
 
       wgpu::ShaderSourceWGSL shaderCodeDesc;

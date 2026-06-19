@@ -1,8 +1,8 @@
 #pragma once
 
+#include "app/input/event.hpp"
+#include "app/input/input.hpp"
 #include "planet.hpp"
-#include "platform/event.hpp"
-#include "platform/input.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -40,12 +40,13 @@ public:
       syncCameraToCurrent();
    }
 
-   void handleInput(const Input& input, const std::vector<std::unique_ptr<Planet>>& planets, glm::ivec2 windowSize) {
+   void handleInput(const Input& input, const std::vector<std::unique_ptr<Planet>>& planets, glm::ivec2 windowSize, bool editing = false) {
       if (input.isKeyPressed(Key::Tab)) {
          toggleFocusMode(planets);
       }
 
-      if (input.isDragging()) {
+      const bool painting = editing && mode == Mode::Locked;
+      if (input.isDragging() && !painting) {
          applyDrag(input.getMouseDelta(), planets);
       }
 
@@ -96,6 +97,7 @@ public:
    [[nodiscard]] Camera& getCamera() { return galaxyCamera; }
    [[nodiscard]] const Camera& getCamera() const { return galaxyCamera; }
    [[nodiscard]] int getFocusedPlanetIndex() const { return focusedPlanetIndex; }
+   [[nodiscard]] bool isLocked() const { return mode == Mode::Locked; }
 
 private:
    Camera galaxyCamera;
