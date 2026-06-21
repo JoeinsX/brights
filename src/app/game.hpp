@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/graphics/gameGraphics.hpp"
+#include "core/graphics/renderSettings.hpp"
 #include "core/resources/resource.hpp"
 #include "core/world/tileInspection.hpp"
 #include "core/world/world.hpp"
@@ -37,7 +38,7 @@ public:
 
       wgpu::Device device = gpuContext.getDevice();
       if (!atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/atlas.png"))) {
-         Log::error("failed to load texture atlas 'assets/atlas.png'");
+         Logger::error("failed to load texture atlas 'assets/atlas.png'");
          return false;
       }
 
@@ -60,7 +61,7 @@ public:
       return true;
    }
 
-   void update(float dt, const Input& input, glm::ivec2 windowSize, const Settings& settings, const BrushSettings& brush) {
+   void update(float dt, const Input& input, glm::ivec2 windowSize, const RenderSettings& settings, const BrushSettings& brush) {
       worldView.handleInput(input, planets, windowSize, brush.active);
 
       const int focusedIndex = worldView.getFocusedPlanetIndex();

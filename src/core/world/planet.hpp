@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/graphics/camera.hpp"
-#include "core/settings.hpp"
+#include "core/graphics/renderSettings.hpp"
 #include "core/world/world.hpp"
 #include "core/world/worldEdit.hpp"
 #include "core/world/worldRenderAdapter.hpp"
@@ -107,7 +107,7 @@ public:
       adapter->update(localCamera, chunkMove);
    }
 
-   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth, const Settings& settings) { updateUniforms(windowSize, chunkMove, globalCamera, depth, settings); }
+   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth, const RenderSettings& settings) { updateUniforms(windowSize, chunkMove, globalCamera, depth, settings); }
 
    [[nodiscard]] std::optional<glm::ivec2> pickTile(const glm::vec2 screenPos, const Camera& globalCamera, const glm::ivec2 windowSize) const {
       const glm::vec2 res = static_cast<glm::vec2>(windowSize);
@@ -156,7 +156,7 @@ private:
    static constexpr float sphereTileCoverage = static_cast<float>(Chunk::COUNT - 2) / static_cast<float>(Chunk::COUNT);
    static constexpr float centerTileStretch = 0.25f * mapTileSpan * sphereTileCoverage;
 
-   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth, const Settings& settings) {
+   void updateUniforms(glm::ivec2 windowSize, const glm::ivec2& chunkMove, Camera& globalCamera, float depth, const RenderSettings& settings) {
       static constexpr float baseResolutionX = 640.f;
       static constexpr float baseResolutionY = 480.f;
 

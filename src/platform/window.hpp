@@ -7,9 +7,19 @@
 #include <string>
 #include <vector>
 
-struct WindowConfig {
+struct WindowSettings {
    glm::ivec2 position{100, 100};
    glm::ivec2 size{1280, 720};
+
+   WindowSettings() = default;
+
+   static constexpr const char* key = "window";
+
+   template<typename Self, typename Fn>
+   static void forEachField(Self& self, Fn&& fn) {
+      fn("position", self.position);
+      fn("size", self.size);
+   }
 };
 
 class Window {
@@ -25,7 +35,7 @@ public:
       glfwTerminate();
    }
 
-   bool initialize(const WindowConfig& config, const char* title) {
+   bool initialize(const WindowSettings& config, const char* title) {
       if (!glfwInit()) {
          return false;
       }

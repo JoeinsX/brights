@@ -1,12 +1,11 @@
 #pragma once
 
-#include "config.hpp"
-#include "core/settings.hpp"
 #include "game.hpp"
 #include "input/event.hpp"
 #include "input/input.hpp"
 #include "platform/window.hpp"
 #include "render/graphicsContext.hpp"
+#include "settings/settings.hpp"
 #include "ui/gui.hpp"
 #include "ui/settingsPanel.hpp"
 #include "ui/tileInspectorPanel.hpp"
@@ -20,23 +19,23 @@
 
 class Application {
 public:
-   ~Application() {
-      config.settingsSection = settings;
-      config.save();
-   }
+   ~Application() { settings.save(); }
 
    bool initialize() {
-      config = Config::load();
-      Log::setLevels(config.loggerSection);
-      settings = config.settingsSection;
+      settings.addSection<LoggerSettings>();
+      settings.addSection<WindowSettings>();
+      settings.addSection<RenderSettings>();
+      settings.load();
 
-      if (!window.initialize(config.windowSection, "Brights: WebGPU")) {
+      Logger::setLevels(settings.accessSection<LoggerSettings>());
+
+      if (!window.initialize(settings.getSection<WindowSettings>(), "Brights: WebGPU")) {
          return false;
       }
 
       gpuContext.initialize(window);
       ctx.initialize(&gpuContext);
-      gameGraphics.initialize(ctx, settings.getDefines());
+      gameGraphics.initialize(ctx, settings.getSection<RenderSettings>().getDefines());
 
       ui.initialize(window, gpuContext.getDevice(), ctx.getSurfaceFormat());
 
@@ -84,13 +83,7 @@ public:
    [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
 
 private:
-   void update(float dt) {
-      if (settings.featuresDirty) {
-         gameGraphics.rebuildPipeline(ctx, settings.getDefines());
-         settings.featuresDirty = false;
-      }
-      game.update(dt, input, window.framebufferSize(), settings, editPanel.settings());
-   }
+   void update(float dt) { game.update(dt, input, window.framebufferSize(), settings.accessSection<RenderSettings>(), editPanel.settings()); }
 
    void renderFrame() {
       if (!ctx.beginFrame(window)) {
@@ -98,7 +91,9 @@ private:
       }
 
       ui.beginFrame();
-      settingsPanel.draw(settings);
+      if (settingsPanel.draw(settings.accessSection<RenderSettings>())) {
+         gameGraphics.setDefines(ctx, settings.accessSection<RenderSettings>().getDefines());
+      }
       editPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getEditStatus());
       tileInspectorPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getTileInspection());
 
@@ -150,7 +145,7 @@ private:
       input.onKey(e.key, e.pressed);
    }
 
-   Config config;
+   Settings settings;
 
    Window window;
    GpuContext gpuContext;
@@ -161,7 +156,6 @@ private:
    WorldEditPanel editPanel;
    TileInspectorPanel tileInspectorPanel;
 
-   Settings settings;
    Input input;
    Game game;
 

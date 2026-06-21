@@ -60,11 +60,11 @@ public:
       deviceDesc.deviceLostCallbackInfo.mode = wgpu::CallbackMode::AllowSpontaneous;
       deviceDesc.deviceLostCallbackInfo.callback = [](WGPUDevice const*, const WGPUDeviceLostReason reason, const WGPUStringView message, void*, void*) {
          if (reason != WGPUDeviceLostReason_Destroyed) {
-            Log::critical("[wgpu] device lost: {}", toStringView(message));
+            Logger::critical("[wgpu] device lost: {}", toStringView(message));
          }
       };
       deviceDesc.uncapturedErrorCallbackInfo.callback = [](WGPUDevice const*, const WGPUErrorType type, const WGPUStringView message, void*, void*) {
-         Log::error("[wgpu] {} error: {}", errorTypeName(static_cast<wgpu::ErrorType>(type)), toStringView(message));
+         Logger::error("[wgpu] {} error: {}", errorTypeName(static_cast<wgpu::ErrorType>(type)), toStringView(message));
       };
 
       device = adapter.requestDevice(deviceDesc);
@@ -143,10 +143,10 @@ private:
    static void onWgpuLog(const WGPULogLevel level, const WGPUStringView message, void*) {
       const std::string_view text = toStringView(message);
       switch (level) {
-      case WGPULogLevel_Error: Log::error("[wgpu] {}", text); break;
-      case WGPULogLevel_Warn:  Log::warn("[wgpu] {}", text); break;
-      case WGPULogLevel_Info:  Log::info("[wgpu] {}", text); break;
-      default:                 Log::debug("[wgpu] {}", text); break;
+      case WGPULogLevel_Error: Logger::error("[wgpu] {}", text); break;
+      case WGPULogLevel_Warn:  Logger::warn("[wgpu] {}", text); break;
+      case WGPULogLevel_Info:  Logger::info("[wgpu] {}", text); break;
+      default:                 Logger::debug("[wgpu] {}", text); break;
       }
    }
 

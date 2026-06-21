@@ -10,9 +10,9 @@
 #include <type_traits>
 #include <utility>
 
-struct LoggerConfig;
+struct LoggerSettings;
 
-class Log {
+class Logger {
 public:
    enum class Level : uint8_t {
       Trace = 0,
@@ -36,7 +36,8 @@ public:
       consteval Message(const S& fmt, const std::source_location loc = std::source_location::current()): fmt(fmt), loc(loc) {}
    };
 
-   static void setLevels(const LoggerConfig& next, const std::source_location loc = std::source_location::current());
+   static void init(const LoggerSettings& levels);
+   static void setLevels(const LoggerSettings& next, const std::source_location loc = std::source_location::current());
 
    template<typename... Args>
    static void trace(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
@@ -134,14 +135,24 @@ private:
    static inline std::atomic<Level> panicLevel{Level::Off};
 };
 
-struct LoggerConfig {
-   Log::Level writeLevel{Log::Level::Default};
-   Log::Level showLocationLevel{Log::Level::Default};
-   Log::Level flushLevel{Log::Level::Default};
-   Log::Level panicLevel{Log::Level::Default};
+struct LoggerSettings {
+   Logger::Level writeLevel{Logger::Level::Default};
+   Logger::Level showLocationLevel{Logger::Level::Default};
+   Logger::Level flushLevel{Logger::Level::Default};
+   Logger::Level panicLevel{Logger::Level::Default};
+
+   static constexpr const char* key = "logger";
+
+   template<typename Self, typename Fn>
+   static void forEachField(Self& self, Fn&& fn) {
+      fn("writeLevel", self.writeLevel);
+      fn("showLocationLevel", self.showLocationLevel);
+      fn("flushLevel", self.flushLevel);
+      fn("panicLevel", self.panicLevel);
+   }
 };
 
-inline void Log::setLevels(const LoggerConfig& next, const std::source_location loc) {
+inline void Logger::setLevels(const LoggerSettings& next, const std::source_location loc) {
    if (next.writeLevel != Level::Default) {
       writeLevel.store(next.writeLevel, std::memory_order_relaxed);
    }

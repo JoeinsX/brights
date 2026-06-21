@@ -24,8 +24,8 @@ public:
    GameGraphics() = default;
    GameGraphics(const GameGraphics&) = delete;
    GameGraphics(GameGraphics&&) = delete;
-   GameGraphics& operator=(const GameGraphics&) = delete;
-   GameGraphics& operator=(GameGraphics&&) = delete;
+   GameGraphics& operator =(const GameGraphics&) = delete;
+   GameGraphics& operator =(GameGraphics&&) = delete;
 
    ~GameGraphics() {
       if (bindGroupLayout) {
@@ -57,17 +57,16 @@ public:
       bglDesc.entries = layoutEntries.data();
       bindGroupLayout = device.createBindGroupLayout(bglDesc);
 
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(device, "assets/shaders/terrain/terrain.wgsl", defines);
-      buildRenderPipeline(device, ctx.getSurfaceFormat(), shaderModule);
+      appliedDefines = defines;
+      compilePipeline(ctx, defines);
    }
 
-   void rebuildPipeline(GraphicsContext& ctx, const std::set<std::string>& defines) {
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(ctx.getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
-      if (pipeline) {
-         pipeline.release();
-         pipeline = nullptr;
+   void setDefines(GraphicsContext& ctx, const std::set<std::string>& defines) {
+      if (defines == appliedDefines) {
+         return;
       }
-      buildRenderPipeline(ctx.getDevice(), ctx.getSurfaceFormat(), shaderModule);
+      appliedDefines = defines;
+      compilePipeline(ctx, defines);
    }
 
    void draw(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
@@ -82,6 +81,15 @@ public:
    [[nodiscard]] wgpu::BindGroupLayout getBindGroupLayout() const { return bindGroupLayout; }
 
 private:
+   void compilePipeline(GraphicsContext& ctx, const std::set<std::string>& defines) {
+      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(ctx.getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
+      if (pipeline) {
+         pipeline.release();
+         pipeline = nullptr;
+      }
+      buildRenderPipeline(ctx.getDevice(), ctx.getSurfaceFormat(), shaderModule);
+   }
+
    void buildRenderPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, wgpu::ShaderModule& shaderModule) {
       wgpu::PipelineLayoutDescriptor layoutDesc;
       layoutDesc.bindGroupLayoutCount = 1;
@@ -135,4 +143,5 @@ private:
 
    wgpu::BindGroupLayout bindGroupLayout = nullptr;
    wgpu::RenderPipeline pipeline = nullptr;
+   std::set<std::string> appliedDefines;
 };
