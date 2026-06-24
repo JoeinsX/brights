@@ -1,7 +1,6 @@
 #pragma once
 
-#include "core/graphics/renderSettings.hpp"
-#include "platform/window.hpp"
+#include "util/hash.hpp"
 #include "util/logger.hpp"
 #include "yamlConversions.hpp"
 
@@ -25,6 +24,12 @@ public:
    virtual void save(YAML::Node& root) const = 0;
 
    virtual ~AnySettingsSection() = default;
+
+   AnySettingsSection() = default;
+   AnySettingsSection(const AnySettingsSection&) = default;
+   AnySettingsSection& operator =(const AnySettingsSection&) = default;
+   AnySettingsSection(AnySettingsSection&&) = default;
+   AnySettingsSection& operator =(AnySettingsSection&&) = default;
 };
 
 template<SettingsSection S>
@@ -53,6 +58,7 @@ public:
    S& accessSection() { return section; }
    const S& getSection() const { return section; }
 
+private:
    S section;
 };
 
@@ -96,8 +102,7 @@ public:
       try {
          root = YAML::LoadFile(path.string());
       } catch (const std::exception& e) {
-         Logger::error("config: could not open '{}' for saving ({})", path.string(), e.what());
-         return;
+         Logger::warn("config: could not read '{}' ({}); writing fresh", path.string(), e.what());
       }
 
       for (auto& it : sections) {

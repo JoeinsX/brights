@@ -1,4 +1,11 @@
 repos:
+  - repo: local
+    hooks:
+      - id: format-includes
+        name: format includes
+        entry: python tools/format_includes.py
+        language: system
+        files: ^src/.*\.(hpp|cpp)$
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v21.1.7
     hooks:
