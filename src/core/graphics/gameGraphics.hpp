@@ -1,8 +1,9 @@
 #pragma once
 
+#include "app/settings/settings.hpp"
+#include "core/graphics/renderSettings.hpp"
 #include "core/world/chunk.hpp"
 #include "core/world/planet.hpp"
-#include "platform/window.hpp"
 #include "render/gpuHelpers.hpp"
 #include "render/graphicsContext.hpp"
 
@@ -36,8 +37,14 @@ public:
       }
    }
 
-   void initialize(GraphicsContext& ctx, const std::set<std::string>& defines = {}) {
-      wgpu::Device device = ctx.getDevice();
+   void initAppComponent(Settings& settings) {
+      settings.addSection<RenderSettings>();
+      renderSettings = &settings.accessSection<RenderSettings>();
+   }
+
+   void initialize(GraphicsContext& ctx) {
+      context = &ctx;
+      wgpu::Device device = context->getDevice();
 
       const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint8_t);
       const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint16_t);
@@ -57,16 +64,17 @@ public:
       bglDesc.entries = layoutEntries.data();
       bindGroupLayout = device.createBindGroupLayout(bglDesc);
 
-      appliedDefines = defines;
-      compilePipeline(ctx, defines);
+      appliedDefines = renderSettings->getDefines();
+      compilePipeline(appliedDefines);
    }
 
-   void setDefines(GraphicsContext& ctx, const std::set<std::string>& defines) {
+   void refreshDefines() {
+      std::set<std::string> defines = renderSettings->getDefines();
       if (defines == appliedDefines) {
          return;
       }
-      appliedDefines = defines;
-      compilePipeline(ctx, defines);
+      appliedDefines = std::move(defines);
+      compilePipeline(appliedDefines);
    }
 
    void draw(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
@@ -81,13 +89,13 @@ public:
    [[nodiscard]] wgpu::BindGroupLayout getBindGroupLayout() const { return bindGroupLayout; }
 
 private:
-   void compilePipeline(GraphicsContext& ctx, const std::set<std::string>& defines) {
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(ctx.getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
+   void compilePipeline(const std::set<std::string>& defines) {
+      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(context->getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
       if (pipeline) {
          pipeline.release();
          pipeline = nullptr;
       }
-      buildRenderPipeline(ctx.getDevice(), ctx.getSurfaceFormat(), shaderModule);
+      buildRenderPipeline(context->getDevice(), context->getSurfaceFormat(), shaderModule);
    }
 
    void buildRenderPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, wgpu::ShaderModule& shaderModule) {
@@ -141,6 +149,8 @@ private:
       pipelineLayout.release();
    }
 
+   GraphicsContext* context = nullptr;
+   RenderSettings* renderSettings = nullptr;
    wgpu::BindGroupLayout bindGroupLayout = nullptr;
    wgpu::RenderPipeline pipeline = nullptr;
    std::set<std::string> appliedDefines;

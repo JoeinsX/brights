@@ -107,7 +107,9 @@ public:
       adapter->update(localCamera, chunkMove);
    }
 
-   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth, const RenderSettings& settings) { updateUniforms(windowSize, chunkMove, globalCamera, depth, settings); }
+   void preRender(Camera& globalCamera, glm::ivec2 windowSize, float depth, const RenderSettings& settings) {
+      updateUniforms(windowSize, chunkMove, globalCamera, depth, settings);
+   }
 
    [[nodiscard]] std::optional<glm::ivec2> pickTile(const glm::vec2 screenPos, const Camera& globalCamera, const glm::ivec2 windowSize) const {
       const glm::vec2 res = static_cast<glm::vec2>(windowSize);

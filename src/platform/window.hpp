@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/input/event.hpp"
+#include "app/settings/settings.hpp"
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -34,6 +35,8 @@ public:
       glfwDestroyWindow(handle);
       glfwTerminate();
    }
+
+   void initAppComponent(Settings& settings) { settings.addSection<WindowSettings>(); }
 
    bool initialize(const WindowSettings& config, const char* title) {
       if (!glfwInit()) {

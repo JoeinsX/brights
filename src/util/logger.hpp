@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <format>
 #include <iostream>
@@ -10,6 +11,7 @@
 #include <type_traits>
 #include <utility>
 
+class Settings;
 struct LoggerSettings;
 
 class Logger {
@@ -33,11 +35,12 @@ public:
 
       template<typename S>
       // NOLINTNEXTLINE(google-explicit-constructor,hicpp-explicit-conversions)
-      consteval Message(const S& fmt, const std::source_location loc = std::source_location::current()): fmt(fmt), loc(loc) {}
+      consteval Message(const S& fmt, std::source_location loc = std::source_location::current()): fmt(fmt), loc(loc) {}
    };
 
-   static void init(const LoggerSettings& levels);
-   static void setLevels(const LoggerSettings& next, const std::source_location loc = std::source_location::current());
+   void initAppComponent(Settings& settings);
+
+   static void setLevels(const LoggerSettings& next, std::source_location loc = std::source_location::current());
 
    template<typename... Args>
    static void trace(const Message<std::type_identity_t<Args>...> msg, Args&&... args) {
@@ -151,23 +154,3 @@ struct LoggerSettings {
       fn("panicLevel", self.panicLevel);
    }
 };
-
-inline void Logger::setLevels(const LoggerSettings& next, const std::source_location loc) {
-   if (next.writeLevel != Level::Default) {
-      writeLevel.store(next.writeLevel, std::memory_order_relaxed);
-   }
-   if (next.showLocationLevel != Level::Default) {
-      showLocationLevel.store(next.showLocationLevel, std::memory_order_relaxed);
-   }
-   if (next.flushLevel != Level::Default) {
-      flushLevel.store(next.flushLevel, std::memory_order_relaxed);
-   }
-   if (next.panicLevel != Level::Default) {
-      panicLevel.store(next.panicLevel, std::memory_order_relaxed);
-   }
-
-   const std::string summary = std::
-      format("policy changed -> write={} loc={} flush={} panic={}, flushing", label(writeLevel.load(std::memory_order_relaxed)),
-             label(showLocationLevel.load(std::memory_order_relaxed)), label(flushLevel.load(std::memory_order_relaxed)), label(panicLevel.load(std::memory_order_relaxed)));
-   emit("logger-meta", summary, loc, true, true);
-}

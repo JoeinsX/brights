@@ -156,13 +156,9 @@ private:
       const TileID id = chunk.terrainAt(local.x, local.y);
 
       switch (brush.tool) {
-      case EditTool::TileBrush:
-         chunk.setTerrain(local.x, local.y, brush.tile, brush.paintHeight);
-         break;
-      case EditTool::HeightBrush:
-         chunk.setTerrain(local.x, local.y, id, std::clamp(chunk.heightAt(local.x, local.y) + heightStep, 0.0f, 2.0f));
-         break;
-      case EditTool::Trimmer: {
+      case EditTool::TileBrush:   chunk.setTerrain(local.x, local.y, brush.tile, brush.paintHeight); break;
+      case EditTool::HeightBrush: chunk.setTerrain(local.x, local.y, id, std::clamp(chunk.heightAt(local.x, local.y) + heightStep, 0.0f, 2.0f)); break;
+      case EditTool::Trimmer:     {
          const float current = chunk.heightAt(local.x, local.y);
          const float trimmed = brush.trimMode == TrimMode::Lift ? std::max(current, trimHeight) : std::min(current, trimHeight);
          chunk.setTerrain(local.x, local.y, id, trimmed);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "applicationMeta.hpp"
 #include "game.hpp"
 #include "input/event.hpp"
 #include "input/input.hpp"
@@ -17,29 +18,35 @@
 #include <variant>
 #include <webgpu/webgpu.hpp>
 
-class Application {
+using AppComponentPack = AppComponentsMixin<Settings, Logger, Window, GameGraphics>;
+
+class Application: public AppComponentPack {
 public:
-   ~Application() { settings.save(); }
+   Application(): AppComponentPack(static_cast<Settings&>(*this)) {}
+
+   Application(Application& other) = delete;
+   Application(Application&& other) = delete;
+   Application& operator =(Application& other) = delete;
+   Application& operator =(Application&& other) = delete;
+
+   ~Application() { getComponent<Settings>().save(); }
 
    bool initialize() {
-      settings.addSection<LoggerSettings>();
-      settings.addSection<WindowSettings>();
-      settings.addSection<RenderSettings>();
-      settings.load();
+      getComponent<Settings>().load();
 
-      Logger::setLevels(settings.accessSection<LoggerSettings>());
+      Logger::setLevels(getComponent<Settings>().accessSection<LoggerSettings>());
 
-      if (!window.initialize(settings.getSection<WindowSettings>(), "Brights: WebGPU")) {
+      if (!getComponent<Window>().initialize(getComponent<Settings>().getSection<WindowSettings>(), "Brights: WebGPU")) {
          return false;
       }
 
-      gpuContext.initialize(window);
+      gpuContext.initialize(getComponent<Window>());
       ctx.initialize(&gpuContext);
-      gameGraphics.initialize(ctx, settings.getSection<RenderSettings>().getDefines());
+      getComponent<GameGraphics>().initialize(ctx);
 
-      ui.initialize(window, gpuContext.getDevice(), ctx.getSurfaceFormat());
+      ui.initialize(getComponent<Window>(), gpuContext.getDevice(), ctx.getSurfaceFormat());
 
-      if (!game.initialize(&gameGraphics, gpuContext, ctx.getQueue())) {
+      if (!game.initialize(&getComponent<GameGraphics>(), gpuContext, ctx.getQueue())) {
          return false;
       }
 
@@ -54,8 +61,8 @@ public:
 
    void mainLoop() {
       input.reset();
-      window.pollEvents();
-      for (const Event& event : window.events()) {
+      getComponent<Window>().pollEvents();
+      for (const Event& event : getComponent<Window>().events()) {
          manageEvent(event);
       }
 
@@ -70,7 +77,7 @@ public:
 
       if (elapsedFpsMs >= 1000) {
          lastFps = frameCount;
-         window.setTitle("Brights: WebGPU - FPS: " + std::to_string(lastFps));
+         getComponent<Window>().setTitle("Brights: WebGPU - FPS: " + std::to_string(lastFps));
          frameCount = 0;
          lastFpsTime = currentTime;
       }
@@ -80,25 +87,25 @@ public:
       renderFrame();
    }
 
-   [[nodiscard]] bool isRunning() const { return !window.shouldClose(); }
+   [[nodiscard]] bool isRunning() const { return !getComponent<Window>().shouldClose(); }
 
 private:
-   void update(float dt) { game.update(dt, input, window.framebufferSize(), settings.accessSection<RenderSettings>(), editPanel.settings()); }
+   void update(float dt) { game.update(dt, input, getComponent<Window>().framebufferSize(), getComponent<Settings>().accessSection<RenderSettings>(), editPanel.settings()); }
 
    void renderFrame() {
-      if (!ctx.beginFrame(window)) {
+      if (!ctx.beginFrame(getComponent<Window>())) {
          return;
       }
 
       ui.beginFrame();
-      if (settingsPanel.draw(settings.accessSection<RenderSettings>())) {
-         gameGraphics.setDefines(ctx, settings.accessSection<RenderSettings>().getDefines());
+      if (settingsPanel.draw(getComponent<Settings>().accessSection<RenderSettings>())) {
+         getComponent<GameGraphics>().refreshDefines();
       }
       editPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getEditStatus());
       tileInspectorPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getTileInspection());
 
       const wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
-      gameGraphics.draw(pass, game.getPlanets());
+      getComponent<GameGraphics>().draw(pass, game.getPlanets());
       ui.render(pass);
       pass.end();
       pass.release();
@@ -145,12 +152,8 @@ private:
       input.onKey(e.key, e.pressed);
    }
 
-   Settings settings;
-
-   Window window;
    GpuContext gpuContext;
    GraphicsContext ctx;
-   GameGraphics gameGraphics;
    Gui ui;
    SettingsPanel settingsPanel;
    WorldEditPanel editPanel;
