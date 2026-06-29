@@ -2,6 +2,7 @@
 
 #include "FastNoise/FastNoise.h"
 #include "chunk.hpp"
+#include "entity.hpp"
 
 #include <algorithm>
 #include <glm/glm.hpp>
@@ -71,7 +72,7 @@ private:
    }
 
 public:
-   explicit WorldGenerator(const uint64_t seed): seed(seed) {}
+   WorldGenerator(const uint64_t seed, const EntityRegistry& entityRegistry): seed(seed), entityRegistry(entityRegistry) {}
 
    static float computeTerrainHeight(const float elevation, const TileID terrain) {
       bool isWater = terrain == TileID::Water || terrain == TileID::ColdWater || terrain == TileID::Ice;
@@ -119,6 +120,9 @@ public:
       ctx.ore->GenUniformGrid2D(oreMap.data(), offset.x, offset.y, size, size, 0.05f, static_cast<int>(seed) + 9991);
       ctx.trees->GenUniformGrid2D(treeMap.data(), offset.x, offset.y, size, size, 1.0f, static_cast<int>(seed) + 555);
 
+      constexpr float treeNoiseThreshold = 0.95f;
+      const EntityDefinition& treeDef = entityRegistry.get(EntityKind::Tree);
+
       for (int y = 0; y < size; ++y) {
          for (int x = 0; x < size; ++x) {
             const int idx = y * size + x;
@@ -132,6 +136,7 @@ public:
 
             float dither = treeRng * 0.05f;
             auto terrain = TileID::Water;
+            bool placeTree = false;
 
             bool isRiver = (h > -0.1f && h < 0.5f) && (r > 0.85f);
 
@@ -193,17 +198,10 @@ public:
                bool isSoil = (terrain == TileID::Grass || terrain == TileID::ColdGrass);
 
                if (isSoil) {
-                  // Trees
-                  if (m > 0.2f && treeRng > 0.6f) {
-                     terrain = TileID::Planks;   // Placeholder for Tree
-                  }
-                  // Dense Forest / Swamp
-                  else if (m > 0.6f && treeRng > 0.3f) {
-                     terrain = TileID::Planks;
-                  }
-                  // Cold bushes
-                  else if (terrain == TileID::ColdGrass && treeRng > 0.8f) {
-                     terrain = TileID::HardGravel;
+                  if (m > 0.2f && treeRng > treeNoiseThreshold) {
+                     placeTree = true;
+                  } else if (terrain == TileID::ColdGrass && treeRng > 0.8f) {
+                     terrain = TileID::HardGravel;   // Cold bushes
                   }
                }
             }
@@ -217,11 +215,19 @@ public:
                }
             }
 
-            chunk.setTerrain(x, y, terrain, computeTerrainHeight(h, terrain));
+            const float height = computeTerrainHeight(h, terrain);
+            chunk.setTerrain(x, y, terrain, height);
+
+            if (placeTree) {
+               chunk.addEntity({.position = glm::vec3(static_cast<float>(offset.x + x) + 0.5f, static_cast<float>(offset.y + y) + 0.5f, height),
+                                .spriteDimensions = treeDef.dimensions,
+                                .spriteId = encodeSpriteCell(treeDef.spriteCell)});
+            }
          }
       }
    }
 
 private:
    uint64_t seed{};
+   const EntityRegistry& entityRegistry;
 };

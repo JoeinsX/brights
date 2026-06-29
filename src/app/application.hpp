@@ -106,6 +106,7 @@ private:
 
       const wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
       getComponent<GameGraphics>().draw(pass, game.getPlanets());
+      getComponent<GameGraphics>().drawSprites(pass, game.getPlanets());
       ui.render(pass);
       pass.end();
       pass.release();

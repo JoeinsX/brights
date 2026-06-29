@@ -1,12 +1,11 @@
 #pragma once
 
 #include "util/bitmask.hpp"
+#include "util/registry.hpp"
 
-#include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <string_view>
-#include <vector>
 
 enum class TileID : uint8_t {
    Air = 0,
@@ -41,22 +40,8 @@ ENABLE_BITMASK_OPERATORS(RenderFlag)
 struct TileDefinition {
    glm::ivec2 atlasBase{};
    int variationCount = 1;
-   float softness = 0.0f;
+   float softness = 0.5f;
    std::string_view name{};
 };
 
-class TileRegistry {
-public:
-   void registerTile(const TileID id, const std::string_view name, const int x, const int y, const int variations, const float softness = 0.5f) {
-      defs[static_cast<size_t>(id)] = {{x, y}, variations, softness, name};
-      order.push_back(id);
-   }
-
-   [[nodiscard]] const TileDefinition& get(const TileID id) const { return defs[static_cast<size_t>(id)]; }
-
-   [[nodiscard]] const std::vector<TileID>& list() const { return order; }
-
-private:
-   std::array<TileDefinition, 256> defs{};
-   std::vector<TileID> order;
-};
+using TileRegistry = Registry<TileID, TileDefinition>;

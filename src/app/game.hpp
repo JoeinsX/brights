@@ -3,6 +3,7 @@
 #include "core/graphics/gameGraphics.hpp"
 #include "core/graphics/renderSettings.hpp"
 #include "core/resources/resource.hpp"
+#include "core/world/entity.hpp"
 #include "core/world/tileInspection.hpp"
 #include "core/world/world.hpp"
 #include "core/world/worldEdit.hpp"
@@ -37,25 +38,33 @@ public:
       initializeGameContent();
 
       wgpu::Device device = gpuContext.getDevice();
-      if (!atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/atlas.png"))) {
-         Logger::error("failed to load texture atlas 'assets/atlas.png'");
+      if (!atlasTexture.load(device, queue, *resourceManager.loadImage("atlas", "assets/textures/atlas.png"))) {
+         Logger::error("failed to load texture atlas 'assets/textures/atlas.png'");
          return false;
       }
 
+      if (!entityTexture.load(device, queue, *resourceManager.loadImage("entity", "assets/textures/entity.png"))) {
+         Logger::error("failed to load entity texture 'assets/textures/entity.png'");
+         return false;
+      }
+
+      const wgpu::BindGroupLayout terrainLayout = graphicsCtx->getBindGroupLayout();
+      const wgpu::BindGroupLayout spriteLayout = graphicsCtx->getSpriteBindGroupLayout();
+
       auto p1 = std::
          make_unique<Planet>(PlanetConfig{.position = {-1200.0f, 0.0f}, .seed = 42, .baseSize = 512.0f, .idleScrollSpeed = {100.0f, 50.0f}, .orbitParams = {1000.0f, 0.2f}},
-                             registry);
-      p1->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
+                             registry, entityRegistry);
+      p1->initialize(device, queue, terrainLayout, spriteLayout, threadPool, atlasTexture, entityTexture);
       planets.push_back(std::move(p1));
 
-      auto p2 = std::make_unique<Planet>(PlanetConfig{.position = {0.0f, 0.0f}, .seed = 1337, .baseSize = 1024.0f, .idleScrollSpeed = {-28.0f, 0.0f}}, registry);
-      p2->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
+      auto p2 = std::make_unique<Planet>(PlanetConfig{.position = {0.0f, 0.0f}, .seed = 1337, .baseSize = 1024.0f, .idleScrollSpeed = {-28.0f, 0.0f}}, registry, entityRegistry);
+      p2->initialize(device, queue, terrainLayout, spriteLayout, threadPool, atlasTexture, entityTexture);
       planets.push_back(std::move(p2));
 
       auto p3 = std::
          make_unique<Planet>(PlanetConfig{.position = {1200.0f, 0.0f}, .seed = 2550, .baseSize = 300.0f, .idleScrollSpeed = {/*13.33f, -24.13f*/}, .orbitParams = {1500.0f, -0.4f}},
-                             registry);
-      p3->initialize(device, queue, graphicsCtx->getBindGroupLayout(), threadPool, atlasTexture);
+                             registry, entityRegistry);
+      p3->initialize(device, queue, terrainLayout, spriteLayout, threadPool, atlasTexture, entityTexture);
       planets.push_back(std::move(p3));
 
       return true;
@@ -127,26 +136,30 @@ private:
    }
 
    void initializeGameContent() {
-      registry.registerTile(TileID::Grass, "Grass", 0, 0, 4);
-      registry.registerTile(TileID::Water, "Water", 1, 0, 4);
-      registry.registerTile(TileID::ColdGrass, "Cold Grass", 2, 0, 4);
-      registry.registerTile(TileID::Stone, "Stone", 3, 0, 4, 0.4f);
-      registry.registerTile(TileID::HardStone, "Hard Stone", 4, 0, 4, 0.4f);
-      registry.registerTile(TileID::Sand, "Sand", 5, 0, 4);
-      registry.registerTile(TileID::ColdWater, "Cold Water", 6, 0, 4);
-      registry.registerTile(TileID::Ice, "Ice", 7, 0, 4);
-      registry.registerTile(TileID::Snow, "Snow", 8, 0, 4, 0.5f);
-      registry.registerTile(TileID::RedOre, "Red Ore", 9, 0, 1);
-      registry.registerTile(TileID::BlueOre, "Blue Ore", 10, 0, 1);
-      registry.registerTile(TileID::BurntGround, "Burnt Ground", 11, 0, 1);
-      registry.registerTile(TileID::Gravel, "Gravel", 12, 0, 1, 0.7f);
-      registry.registerTile(TileID::HardGravel, "Hard Gravel", 13, 0, 1);
-      registry.registerTile(TileID::Planks, "Planks", 14, 0, 1, 0.0f);
-      registry.registerTile(TileID::PlankFloor, "Plank Floor", 15, 0, 1);
+      registry.add(TileID::Grass, {.atlasBase = {0, 0}, .variationCount = 4, .name = "Grass"});
+      registry.add(TileID::Water, {.atlasBase = {1, 0}, .variationCount = 4, .name = "Water"});
+      registry.add(TileID::ColdGrass, {.atlasBase = {2, 0}, .variationCount = 4, .name = "Cold Grass"});
+      registry.add(TileID::Stone, {.atlasBase = {3, 0}, .variationCount = 4, .softness = 0.4f, .name = "Stone"});
+      registry.add(TileID::HardStone, {.atlasBase = {4, 0}, .variationCount = 4, .softness = 0.4f, .name = "Hard Stone"});
+      registry.add(TileID::Sand, {.atlasBase = {5, 0}, .variationCount = 4, .name = "Sand"});
+      registry.add(TileID::ColdWater, {.atlasBase = {6, 0}, .variationCount = 4, .name = "Cold Water"});
+      registry.add(TileID::Ice, {.atlasBase = {7, 0}, .variationCount = 4, .name = "Ice"});
+      registry.add(TileID::Snow, {.atlasBase = {8, 0}, .variationCount = 4, .name = "Snow"});
+      registry.add(TileID::RedOre, {.atlasBase = {9, 0}, .variationCount = 1, .name = "Red Ore"});
+      registry.add(TileID::BlueOre, {.atlasBase = {10, 0}, .variationCount = 1, .name = "Blue Ore"});
+      registry.add(TileID::BurntGround, {.atlasBase = {11, 0}, .variationCount = 1, .name = "Burnt Ground"});
+      registry.add(TileID::Gravel, {.atlasBase = {12, 0}, .variationCount = 1, .softness = 0.7f, .name = "Gravel"});
+      registry.add(TileID::HardGravel, {.atlasBase = {13, 0}, .variationCount = 1, .name = "Hard Gravel"});
+      registry.add(TileID::Planks, {.atlasBase = {14, 0}, .variationCount = 1, .softness = 0.0f, .name = "Planks"});
+      registry.add(TileID::PlankFloor, {.atlasBase = {15, 0}, .variationCount = 1, .name = "Plank Floor"});
+
+      entityRegistry.add(EntityKind::Player, {.spriteCell = {0, 0}, .dimensions = {1.0f, 1.0f}, .name = "Player"});
+      entityRegistry.add(EntityKind::Tree, {.spriteCell = {0, 1}, .dimensions = {1.0f, 1.0f}, .name = "Tree"});
    }
 
    ResourceManager resourceManager;
    GpuTexture atlasTexture;
+   GpuTexture entityTexture;
 
    std::vector<std::unique_ptr<Planet>> planets;
 
@@ -156,6 +169,7 @@ private:
    Threadpool threadPool;
 
    TileRegistry registry;
+   EntityRegistry entityRegistry;
    WorldView worldView;
    EditStatus editStatus;
    std::optional<TileInspection> tileInspection;

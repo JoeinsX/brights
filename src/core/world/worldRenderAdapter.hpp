@@ -2,16 +2,27 @@
 
 #include "chunk.hpp"
 #include "core/graphics/camera.hpp"
+#include "entity.hpp"
 
+#include <algorithm>
 #include <stack>
+#include <vector>
 #include <webgpu/webgpu.hpp>
 
 class WorldRenderAdapter {
 public:
-   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer chunkDataBuffer, const wgpu::Buffer tilemapBuffer):
-      queue(queue), chunkDataBuffer(chunkDataBuffer), tilemapBuffer(tilemapBuffer) {
+   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer chunkDataBuffer, const wgpu::Buffer tilemapBuffer, const wgpu::Buffer entityBuffer):
+      queue(queue), chunkDataBuffer(chunkDataBuffer), tilemapBuffer(tilemapBuffer), entityBuffer(entityBuffer) {
       displayChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
       packedChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
+   }
+
+   void uploadEntities(const std::vector<Entity>& entities) {
+      const uint32_t count = std::min(static_cast<uint32_t>(entities.size()), spriteCapacity);
+      if (count == 0) {
+         return;
+      }
+      queue.writeBuffer(entityBuffer, 0, entities.data(), static_cast<size_t>(count) * sizeof(Entity));
    }
 
    void onChunkDataUpdated(const glm::ivec2 chunkPos) {
@@ -60,6 +71,7 @@ private:
    wgpu::Queue queue = nullptr;
    wgpu::Buffer chunkDataBuffer = nullptr;
    wgpu::Buffer tilemapBuffer = nullptr;
+   wgpu::Buffer entityBuffer = nullptr;
    std::vector<uint16_t> packedChunkMaps;
    std::vector<uint8_t> displayChunkMaps;
    std::stack<uint16_t> updatedDataOffsets;

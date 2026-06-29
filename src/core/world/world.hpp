@@ -3,6 +3,7 @@
 #include "chunk.hpp"
 #include "chunkMesher.hpp"
 #include "core/graphics/camera.hpp"
+#include "entity.hpp"
 #include "tileInspection.hpp"
 #include "util/threadpool.hpp"
 #include "worldEdit.hpp"
@@ -11,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <glm/gtx/hash.hpp>
 #include <memory>
 #include <mutex>
@@ -20,13 +22,18 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 class World {
 public:
-   explicit World(Threadpool& threadPool, TileRegistry& registry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter, uint32_t loadingRadius,
-                  uint32_t unloadingThreshold):
-      loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), threadPool(threadPool), registry(registry), worldGenerator(worldGenerator),
-      renderAdapter(renderAdapter) {}
+   World(Threadpool& threadPool, TileRegistry& registry, const EntityRegistry& entityRegistry, WorldGenerator& worldGenerator, WorldRenderAdapter& renderAdapter,
+         uint32_t loadingRadius, uint32_t unloadingThreshold):
+      loadingRadius(loadingRadius), unloadingThreshold(unloadingThreshold), threadPool(threadPool), registry(registry), entityRegistry(entityRegistry),
+      worldGenerator(worldGenerator), renderAdapter(renderAdapter) {
+      seedDynamicEntities();
+   }
+
+   [[nodiscard]] uint32_t getEntityCount() const { return uploadedEntityCount; }
 
    void update(const Camera& camera, const glm::ivec2& globalChunkMove) {
       processFinishedTasks();
@@ -43,6 +50,7 @@ public:
                continue;
             }
             it = chunks.erase(it);
+            staticDirty = true;
          } else {
             ++it;
          }
@@ -66,6 +74,19 @@ public:
                finishedQueue.push({TaskResult::Type::Generated, newChunk});
             });
          }
+      }
+
+      repositionPlayer(camera, globalChunkMove);
+      updateDynamicHeights();
+
+      if (staticDirty) {
+         rebuildStaticEntities();
+         staticDirty = false;
+         entitiesDirty = true;
+      }
+      if (entitiesDirty) {
+         uploadEntities();
+         entitiesDirty = false;
       }
    }
 
@@ -140,6 +161,119 @@ public:
    }
 
 private:
+   void seedDynamicEntities() {
+      const EntityDefinition& def = entityRegistry.get(EntityKind::Player);
+      dynamicEntities.push_back({.spriteDimensions = def.dimensions, .spriteId = encodeSpriteCell(def.spriteCell)});
+   }
+
+   void repositionPlayer(const Camera& camera, const glm::ivec2 globalChunkMove) {
+      const glm::vec2 center = camera.getOffset() + glm::vec2(globalChunkMove * Chunk::SIZE);
+      Entity& player = dynamicEntities.front();
+      if (glm::vec2(player.position) != center) {
+         player.position = glm::vec3(center, player.position.z);
+         entitiesDirty = true;
+      }
+   }
+
+   void updateDynamicHeights() {
+      for (Entity& entity : dynamicEntities) {
+         if (const auto sampled = sampleSmoothedHeight(glm::vec2(entity.position)); sampled) {
+            if (std::abs(*sampled - entity.position.z) > 1e-5f) {
+               entity.position.z = *sampled;
+               entitiesDirty = true;
+            }
+         }
+      }
+   }
+
+   void rebuildStaticEntities() {
+      staticEntities.clear();
+      for (const auto& [pos, chunk] : chunks) {
+         const std::vector<Entity>& chunkEntities = chunk->getEntities();
+         staticEntities.insert(staticEntities.end(), chunkEntities.begin(), chunkEntities.end());
+      }
+   }
+
+   void uploadEntities() {
+      visibleEntities.clear();
+      visibleEntities.reserve(dynamicEntities.size() + staticEntities.size());
+      visibleEntities.insert(visibleEntities.end(), dynamicEntities.begin(), dynamicEntities.end());
+      visibleEntities.insert(visibleEntities.end(), staticEntities.begin(), staticEntities.end());
+      renderAdapter.uploadEntities(visibleEntities);
+      uploadedEntityCount = static_cast<uint32_t>(std::min<size_t>(visibleEntities.size(), spriteCapacity));
+   }
+
+   [[nodiscard]] std::optional<float> sampleSmoothedHeight(const glm::vec2 worldPos) const {
+      const glm::ivec2 worldTile = static_cast<glm::ivec2>(glm::floor(worldPos));
+
+      float heights[9];
+      float centerSoftness = 0.0f;
+
+      const glm::ivec2 offsets[9] = {{0, 0}, {1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}, {0, 1}};
+
+      for (int i = 0; i < 9; ++i) {
+         const glm::ivec2 nTile = worldTile + offsets[i];
+         const glm::ivec2 chunkPos = toChunkCoord(nTile);
+         const auto it = chunks.find(chunkPos);
+         if (it == chunks.end()) {
+            return std::nullopt;
+         }
+         const glm::ivec2 local = nTile - chunkPos * Chunk::SIZE;
+         heights[i] = it->second->heightAt(local.x, local.y);
+
+         if (i == 0) {
+            const TileID id = it->second->terrainAt(local.x, local.y);
+            centerSoftness = registry.get(id).softness;
+         }
+      }
+
+      const float centerH = heights[0];
+      if (centerH <= 0.01f) {
+         return 0.0f;
+      }
+
+      float softness = centerSoftness;
+      if (softness < 0.001f) {
+         softness = 0.02f;
+      }
+      softness = std::min(softness, 0.5f);
+
+      const glm::vec2 uv = worldPos - glm::vec2(worldTile);
+      if (uv.x >= softness && (1.0f - uv.x) >= softness && uv.y >= softness && (1.0f - uv.y) >= softness) {
+         return centerH;
+      }
+
+      const float hL = heights[6];
+      const float hR = heights[2];
+      const float hU = heights[4];
+      const float hD = heights[8];
+
+      const float eL = std::min(centerH, hL);
+      const float eR = std::min(centerH, hR);
+      const float eU = std::min(centerH, hU);
+      const float eD = std::min(centerH, hD);
+
+      const float cUL = std::min(std::min(centerH, hL), std::min(hU, heights[5]));
+      const float cUR = std::min(std::min(centerH, hR), std::min(hU, heights[3]));
+      const float cDL = std::min(std::min(centerH, hL), std::min(hD, heights[7]));
+      const float cDR = std::min(std::min(centerH, hR), std::min(hD, heights[1]));
+
+      auto smoothstep = [](const float edge0, const float edge1, const float x) {
+         const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+         return t * t * (3.0f - 2.0f * t);
+      };
+
+      const float aL = smoothstep(1.0f, 0.0f, std::clamp(uv.x / softness, 0.0f, 1.0f));
+      const float aR = smoothstep(1.0f, 0.0f, std::clamp((1.0f - uv.x) / softness, 0.0f, 1.0f));
+      const float aU = smoothstep(1.0f, 0.0f, std::clamp(uv.y / softness, 0.0f, 1.0f));
+      const float aD = smoothstep(1.0f, 0.0f, std::clamp((1.0f - uv.y) / softness, 0.0f, 1.0f));
+
+      const float mX = 1.0f - aL - aR;
+      const float mY = 1.0f - aU - aD;
+
+      return cUL * aL * aU + cUR * aR * aU + cDL * aL * aD + cDR * aR * aD + eL * aL * mY + eR * aR * mY + eU * aU * mX + eD * aD * mX + centerH * mX * mY;
+   }
+
    static glm::ivec2 toChunkCoord(const glm::ivec2 worldTile) {
       const auto floorDiv = [](const int v) { return v >= 0 ? v / Chunk::SIZE : -((-v + Chunk::SIZE - 1) / Chunk::SIZE); };
       return {floorDiv(worldTile.x), floorDiv(worldTile.y)};
@@ -228,6 +362,7 @@ private:
          if (result.type == TaskResult::Type::Generated) {
             chunks[result.chunk->getPos()] = result.chunk;
             pendingGeneration.erase(result.chunk->getPos());
+            staticDirty = true;
 
             tryQueueMeshing(result.chunk->getPos());
 
@@ -301,10 +436,18 @@ private:
    std::unordered_set<glm::ivec2> pendingGeneration;
    std::unordered_set<glm::ivec2> pendingMeshing;
 
+   std::vector<Entity> staticEntities;
+   std::vector<Entity> dynamicEntities;
+   std::vector<Entity> visibleEntities;
+   uint32_t uploadedEntityCount = 0;
+   bool staticDirty = false;
+   bool entitiesDirty = true;
+
    uint32_t loadingRadius = 0;
    uint32_t unloadingThreshold = 0;
    Threadpool& threadPool;
    TileRegistry& registry;
+   const EntityRegistry& entityRegistry;
    WorldGenerator& worldGenerator;
    WorldRenderAdapter& renderAdapter;
 };

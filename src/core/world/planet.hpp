@@ -2,6 +2,7 @@
 
 #include "core/graphics/camera.hpp"
 #include "core/graphics/renderSettings.hpp"
+#include "core/world/entity.hpp"
 #include "core/world/world.hpp"
 #include "core/world/worldEdit.hpp"
 #include "core/world/worldRenderAdapter.hpp"
@@ -47,13 +48,16 @@ struct PlanetRenderData {
    GpuBuffer tilemapBuffer;
    GpuBuffer packedBuffer;
    GpuBuffer uniformBuffer;
+   GpuBuffer spriteBuffer;
 
    wgpu::BindGroup bindGroup = nullptr;
+   wgpu::BindGroup spriteBindGroup = nullptr;
 };
 
 class Planet {
 public:
-   Planet(const PlanetConfig& config, TileRegistry& registry): config(config), registry(registry), generator(config.seed) {
+   Planet(const PlanetConfig& config, TileRegistry& registry, EntityRegistry& entityRegistry):
+      config(config), registry(registry), entityRegistry(entityRegistry), generator(config.seed, entityRegistry) {
       if (std::abs(config.orbitParams.x) > 0.001f) {
          currentOrbitAngle = std::atan2(config.position.y, config.position.x);
       }
@@ -61,20 +65,23 @@ public:
 
    ~Planet() { terminate(); }
 
-   void initialize(wgpu::Device device, wgpu::Queue _queue, wgpu::BindGroupLayout layout, Threadpool& threadPool, const GpuTexture& sharedAtlas) {
+   void initialize(wgpu::Device device, wgpu::Queue _queue, wgpu::BindGroupLayout layout, wgpu::BindGroupLayout spriteLayout, Threadpool& threadPool, const GpuTexture& sharedAtlas,
+                   const GpuTexture& sharedEntity) {
       queue = _queue;
 
       const uint64_t tileMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint8_t);
       const uint64_t packedMapSize = static_cast<uint64_t>(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED) * sizeof(uint16_t);
       const uint64_t uniformSize = sizeof(UniformData);
+      const uint64_t spriteBufferSize = static_cast<uint64_t>(spriteCapacity) * sizeof(Entity);
 
       renderData.tilemapBuffer.init(device, tileMapSize, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst, "Planet_TileMap");
       renderData.packedBuffer.init(device, packedMapSize, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst, "Planet_PackedMap");
       renderData.uniformBuffer.init(device, uniformSize, wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst, "Planet_Uniforms");
+      renderData.spriteBuffer.init(device, spriteBufferSize, wgpu::BufferUsage::Storage | wgpu::BufferUsage::CopyDst, "Planet_Sprites");
 
-      adapter = std::make_unique<WorldRenderAdapter>(queue, renderData.packedBuffer.getBuffer(), renderData.tilemapBuffer.getBuffer());
+      adapter = std::make_unique<WorldRenderAdapter>(queue, renderData.packedBuffer.getBuffer(), renderData.tilemapBuffer.getBuffer(), renderData.spriteBuffer.getBuffer());
 
-      world = std::make_unique<World>(threadPool, registry, generator, *adapter, Chunk::COUNT / 2, 0);
+      world = std::make_unique<World>(threadPool, registry, entityRegistry, generator, *adapter, Chunk::COUNT / 2, 0);
 
       std::vector<wgpu::BindGroupEntry> entries(5);
       entries[0] = WGPUHelpers::bindBuffer(0, renderData.uniformBuffer.getBuffer(), uniformSize);
@@ -88,6 +95,18 @@ public:
       bgDesc.entryCount = static_cast<uint32_t>(entries.size());
       bgDesc.entries = entries.data();
       renderData.bindGroup = device.createBindGroup(bgDesc);
+
+      std::vector<wgpu::BindGroupEntry> spriteEntries(4);
+      spriteEntries[0] = WGPUHelpers::bindBuffer(0, renderData.uniformBuffer.getBuffer(), uniformSize);
+      spriteEntries[1] = WGPUHelpers::bindBuffer(1, renderData.spriteBuffer.getBuffer(), spriteBufferSize);
+      spriteEntries[2] = WGPUHelpers::bindTexture(2, sharedEntity.getView());
+      spriteEntries[3] = WGPUHelpers::bindSampler(3, sharedEntity.getSampler());
+
+      wgpu::BindGroupDescriptor spriteBgDesc;
+      spriteBgDesc.layout = spriteLayout;
+      spriteBgDesc.entryCount = static_cast<uint32_t>(spriteEntries.size());
+      spriteBgDesc.entries = spriteEntries.data();
+      renderData.spriteBindGroup = device.createBindGroup(spriteBgDesc);
    }
 
    void update(float dt, bool focused) {
@@ -133,6 +152,8 @@ public:
    [[nodiscard]] TileInspection inspectTile(const glm::ivec2 worldTile) const { return world->inspect(worldTile); }
 
    [[nodiscard]] wgpu::BindGroup getBindGroup() const { return renderData.bindGroup; }
+   [[nodiscard]] wgpu::BindGroup getSpriteBindGroup() const { return renderData.spriteBindGroup; }
+   [[nodiscard]] uint32_t getSpriteCount() const { return world ? world->getEntityCount() : 0u; }
    [[nodiscard]] const PlanetConfig& getConfig() const { return config; }
 
    [[nodiscard]] float getPlanetRadius() const { return config.baseSize * 0.5f; }
@@ -146,9 +167,14 @@ public:
          renderData.bindGroup.release();
          renderData.bindGroup = nullptr;
       }
+      if (renderData.spriteBindGroup) {
+         renderData.spriteBindGroup.release();
+         renderData.spriteBindGroup = nullptr;
+      }
       renderData.tilemapBuffer.destroy();
       renderData.packedBuffer.destroy();
       renderData.uniformBuffer.destroy();
+      renderData.spriteBuffer.destroy();
    }
 
    Camera localCamera{};
@@ -198,6 +224,7 @@ private:
    PlanetRenderData renderData;
 
    TileRegistry& registry;
+   EntityRegistry& entityRegistry;
    WorldGenerator generator;
 
    wgpu::Queue queue = nullptr;
