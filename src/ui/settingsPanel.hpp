@@ -7,7 +7,9 @@
 class SettingsPanel {
 public:
    bool draw(RenderSettings& settings) {
-      if (!visible) return false;
+      if (!visible) {
+         return false;
+      }
 
       ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
       if (!ImGui::Begin("Settings", &visible)) {

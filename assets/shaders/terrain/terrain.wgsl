@@ -57,7 +57,7 @@ fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
     let rayDir2 = normalize(mix(rotatedViewVec, vec3f(0.0, 0.0, -1.0), distSq * distSq * 0.2));
     let rayDir = normalize(mix(rayDir1, rayDir2, distSq / 2.0));
 
-    let trace = traceTerrain(vec3f(worldPos, 2.0), rayDir, bias, simpleModeActive);
+    let trace = traceTerrain(vec3f(worldPos, maxTerrainHeight), rayDir, bias, simpleModeActive);
     if (!trace.hit) {
         return vec4f(0.1, 0.1, 0.1, 1.0);
     }

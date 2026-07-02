@@ -112,15 +112,16 @@ private:
 
    static Key mapKey(const int key) {
       switch (key) {
-      case GLFW_KEY_W:   return Key::W;
-      case GLFW_KEY_A:   return Key::A;
-      case GLFW_KEY_S:   return Key::S;
-      case GLFW_KEY_D:   return Key::D;
-      case GLFW_KEY_TAB: return Key::Tab;
-      case GLFW_KEY_F1:  return Key::F1;
-      case GLFW_KEY_F2:  return Key::F2;
-      case GLFW_KEY_F3:  return Key::F3;
-      default:           return Key::Count;
+      case GLFW_KEY_W:     return Key::W;
+      case GLFW_KEY_A:     return Key::A;
+      case GLFW_KEY_S:     return Key::S;
+      case GLFW_KEY_D:     return Key::D;
+      case GLFW_KEY_TAB:   return Key::Tab;
+      case GLFW_KEY_SPACE: return Key::Space;
+      case GLFW_KEY_F1:    return Key::F1;
+      case GLFW_KEY_F2:    return Key::F2;
+      case GLFW_KEY_F3:    return Key::F3;
+      default:             return Key::Count;
       }
    }
 

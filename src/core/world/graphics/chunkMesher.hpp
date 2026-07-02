@@ -1,8 +1,9 @@
 #pragma once
 
-#include "chunk.hpp"
+#include "core/world/chunk.hpp"
+#include "core/world/contents/atlasCell.hpp"
+#include "core/world/graphics/worldRenderAdapter.hpp"
 #include "util/bitmask.hpp"
-#include "worldRenderAdapter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -41,7 +42,7 @@ private:
    struct TilePacker {
       static uint16_t pack(float height, float softness, RenderFlag flags) {
          // Layout: HHHHHHHH SSSS FFFF
-         const uint16_t h = static_cast<uint16_t>(std::clamp(height * 127.5f, 0.0f, 255.0f));
+         const uint16_t h = static_cast<uint16_t>(std::clamp(height * (255.0f / maxTerrainHeight), 0.0f, 255.0f));
          const uint16_t s = static_cast<uint16_t>(std::clamp(softness * 15.0f, 0.0f, 15.0f));
          const uint16_t f = static_cast<uint8_t>(flags) & 0x0F;
 
@@ -54,7 +55,7 @@ private:
 
       MeshContext() = default;
 
-      void build(const Chunk& centerChunk, const std::array<std::shared_ptr<Chunk>, 8>& neighbors, const TileRegistry& registry) {
+      void build(const Chunk& centerChunk, const std::array<std::shared_ptr<Chunk>, 8>& neighbors, const TileRegistry& tileRegistry) {
          for (int y = 0; y < CHUNK_SIZE; ++y) {
             const int centerRowOffset = y * CHUNK_SIZE;
             const int bufferRowOffset = (y + 1) * PADDED_SIZE + 1;
@@ -63,7 +64,7 @@ private:
                const int idx = centerRowOffset + x;
                const TileID tID = centerChunk.terrainMap[idx];
 
-               buffer[bufferRowOffset + x] = {centerChunk.heightMap[idx], registry.get(tID).softness, tID};
+               buffer[bufferRowOffset + x] = {centerChunk.heightMap[idx], tileRegistry.get(tID).softness, tID};
             }
          }
 
@@ -72,7 +73,7 @@ private:
                const int idx = srcY * CHUNK_SIZE + srcX;
                const TileID id = chunk->terrainMap[idx];
 
-               buffer[destY * PADDED_SIZE + destX] = {chunk->heightMap[idx], registry.get(id).softness, id};
+               buffer[destY * PADDED_SIZE + destX] = {chunk->heightMap[idx], tileRegistry.get(id).softness, id};
             } else {
                buffer[destY * PADDED_SIZE + destX] = {0.0f, 0.0f, TileID::Air};
             }
@@ -100,22 +101,18 @@ private:
    };
 
 public:
-   static void meshChunk(Chunk& chunk, const TileRegistry& registry, std::mt19937& rng, const std::array<std::shared_ptr<Chunk>, 8>& neighbors, WorldRenderAdapter& renderAdapter) {
+   static void meshChunk(Chunk& chunk, const TileRegistry& tileRegistry, std::mt19937& rng, const std::array<std::shared_ptr<Chunk>, 8>& neighbors,
+                         WorldRenderAdapter& renderAdapter) {
       uint8_t* displayMapData = renderAdapter.getDisplayDataPtrForChunk(chunk.getPos());
       uint16_t* packedMapData = renderAdapter.getPackedDataPtrForChunk(chunk.getPos());
 
       for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
-         const TileDefinition& def = registry.get(chunk.terrainMap[i]);
-
-         const glm::vec2 terrainCoords = getAtlasCoords(def, rng);
-         const uint8_t tx = static_cast<uint8_t>(std::clamp(terrainCoords.x, 0.0f, 15.0f));
-         const uint8_t ty = static_cast<uint8_t>(std::clamp(terrainCoords.y, 0.0f, 15.0f));
-
-         displayMapData[i] = (tx << 4) | (ty & 0x0F);
+         const TileDefinition& def = tileRegistry.get(chunk.terrainMap[i]);
+         displayMapData[i] = packAtlasCell(getAtlasCell(def, rng));
       }
 
       MeshContext ctx;
-      ctx.build(chunk, neighbors, registry);
+      ctx.build(chunk, neighbors, tileRegistry);
 
       for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; ++i) {
          const int x = i % CHUNK_SIZE;
@@ -127,12 +124,12 @@ public:
    }
 
 private:
-   static glm::vec2 getAtlasCoords(const TileDefinition& def, std::mt19937& rng) {
-      glm::ivec2 atlasBase = def.atlasBase;
+   static glm::ivec2 getAtlasCell(const TileDefinition& def, std::mt19937& rng) {
+      glm::ivec2 cell = def.atlasBase;
       if (def.variationCount > 1) {
          std::uniform_int_distribution<int> dist(0, def.variationCount - 1);
-         atlasBase.y += dist(rng);
+         cell.y += dist(rng);
       }
-      return static_cast<glm::vec2>(atlasBase);
+      return cell;
    }
 };

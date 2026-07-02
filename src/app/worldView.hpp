@@ -2,7 +2,7 @@
 
 #include "app/input/event.hpp"
 #include "app/input/input.hpp"
-#include "planet.hpp"
+#include "core/world/planet.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -29,7 +29,7 @@ public:
       float maxScale = 86.0f;
       float zoomStep = 1.1f;
       float baseLerpSpeed = 8.0f;
-      float focusDurationMs = 900.0f;
+      float focusDuration = 0.9f;
       float focusMinPixelsPerTile = 1.5f;
       float focusMaxPixelsPerTile = 128.0f;
    };
@@ -45,16 +45,30 @@ public:
          toggleFocusMode(planets);
       }
 
+      Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
+
+      if (input.isKeyPressed(Key::Space) && focused) {
+         focused->togglePossession();
+      }
+
+      const bool possessing = focused && focused->isPossessing();
+
       const bool painting = editing && mode == Mode::Locked;
-      if (input.isDragging() && !painting) {
+      if (input.isDragging() && !painting && !possessing) {
          applyDrag(input.getMouseDelta(), planets);
       }
 
       const auto keyInput = glm::vec2(static_cast<float>(input.isKeyDown(Key::D)) - static_cast<float>(input.isKeyDown(Key::A)),
                                       static_cast<float>(input.isKeyDown(Key::S)) - static_cast<float>(input.isKeyDown(Key::W)));
+      const glm::vec2 axis = glm::length(keyInput) > 0.1f ? glm::normalize(keyInput) : glm::vec2(0.0f);
 
-      if (glm::length(keyInput) > 0.1f) {
-         applyKeyboardPan(glm::normalize(keyInput) * 10.0f, planets);
+      if (possessing) {
+         planetControlAxis = axis;
+      } else {
+         planetControlAxis = glm::vec2(0.0f);
+         if (glm::length(axis) > 0.1f) {
+            applyKeyboardPan(axis * 10.0f, planets);
+         }
       }
 
       const float scrollY = input.getScrollDelta().y;
@@ -64,7 +78,7 @@ public:
       }
    }
 
-   void update(float dt, const std::vector<std::unique_ptr<Planet>>& planets) {
+   void update(float dtSeconds, const std::vector<std::unique_ptr<Planet>>& planets) {
       if (mode != Mode::Free) {
          if (const Planet* focused = focusedPlanet(planets)) {
             targetState.offset = focused->getConfig().position;
@@ -74,7 +88,7 @@ public:
       if (mode == Mode::Locked) {
          currentState = targetState;
       } else if (mode == Mode::Transitioning) {
-         transitionT = std::min(transitionT + dt / config.focusDurationMs, 1.0f);
+         transitionT = std::min(transitionT + dtSeconds / config.focusDuration, 1.0f);
          const float ease = glm::smoothstep(0.0f, 1.0f, transitionT);
 
          currentState.offset = glm::mix(transitionStart.offset, targetState.offset, ease);
@@ -85,7 +99,7 @@ public:
             currentState = targetState;
          }
       } else {
-         const float lerpFactor = 1.0f - std::exp(-config.baseLerpSpeed * dt / 1000.0f);
+         const float lerpFactor = 1.0f - std::exp(-config.baseLerpSpeed * dtSeconds);
          currentState.offset = glm::mix(currentState.offset, targetState.offset, lerpFactor);
          currentState.scale = glm::mix(currentState.scale, targetState.scale, lerpFactor);
       }
@@ -98,6 +112,7 @@ public:
    [[nodiscard]] const Camera& getCamera() const { return galaxyCamera; }
    [[nodiscard]] int getFocusedPlanetIndex() const { return focusedPlanetIndex; }
    [[nodiscard]] bool isLocked() const { return mode == Mode::Locked; }
+   [[nodiscard]] glm::vec2 getPlanetControlAxis() const { return planetControlAxis; }
 
 private:
    Camera galaxyCamera;
@@ -109,6 +124,7 @@ private:
    CameraState transitionStart;
 
    int focusedPlanetIndex = -1;
+   glm::vec2 planetControlAxis{};
 
    float savedGlobalScale = 0.5f;
    float savedFocusPixelsPerTile = 2.0f;
@@ -163,8 +179,7 @@ private:
    void applyDrag(glm::vec2 deltaPixels, const std::vector<std::unique_ptr<Planet>>& planets) {
       Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
       if (focused) {
-         focused->localCamera.setScale(focused->getPixelsPerTile(galaxyCamera.getScale()));
-         focused->localCamera.pan(deltaPixels);
+         focused->panLocal(deltaPixels, galaxyCamera.getScale());
       } else {
          targetState.offset -= deltaPixels / currentState.scale;
       }
@@ -173,8 +188,7 @@ private:
    void applyKeyboardPan(glm::vec2 direction, const std::vector<std::unique_ptr<Planet>>& planets) {
       Planet* focused = mode == Mode::Locked ? focusedPlanet(planets) : nullptr;
       if (focused) {
-         focused->localCamera.setScale(focused->getPixelsPerTile(galaxyCamera.getScale()));
-         focused->localCamera.pan(-direction);
+         focused->panLocal(-direction, galaxyCamera.getScale());
       } else {
          targetState.offset += direction / currentState.scale;
       }

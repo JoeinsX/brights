@@ -1,33 +1,41 @@
 #pragma once
 
-#include "chunk.hpp"
 #include "core/graphics/camera.hpp"
-#include "entity.hpp"
+#include "core/world/chunk.hpp"
+#include "core/world/graphics/spriteInstance.hpp"
 
 #include <algorithm>
-#include <stack>
 #include <vector>
 #include <webgpu/webgpu.hpp>
 
 class WorldRenderAdapter {
 public:
-   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer chunkDataBuffer, const wgpu::Buffer tilemapBuffer, const wgpu::Buffer entityBuffer):
-      queue(queue), chunkDataBuffer(chunkDataBuffer), tilemapBuffer(tilemapBuffer), entityBuffer(entityBuffer) {
+   WorldRenderAdapter(const wgpu::Queue queue, const wgpu::Buffer packedBuffer, const wgpu::Buffer tilemapBuffer, const wgpu::Buffer spriteBuffer):
+      queue(queue), packedBuffer(packedBuffer), tilemapBuffer(tilemapBuffer), spriteBuffer(spriteBuffer) {
       displayChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
       packedChunkMaps.resize(Chunk::SIZE_SQUARED * Chunk::COUNT_SQUARED);
    }
 
-   void uploadEntities(const std::vector<Entity>& entities) {
-      const uint32_t count = std::min(static_cast<uint32_t>(entities.size()), spriteCapacity);
-      if (count == 0) {
-         return;
+   uint32_t uploadStaticSprites(const std::vector<SpriteInstance>& sprites) {
+      const uint32_t count = std::min(static_cast<uint32_t>(sprites.size()), staticSpriteCapacity);
+      if (count != 0) {
+         queue.writeBuffer(spriteBuffer, 0, sprites.data(), static_cast<size_t>(count) * sizeof(SpriteInstance));
       }
-      queue.writeBuffer(entityBuffer, 0, entities.data(), static_cast<size_t>(count) * sizeof(Entity));
+      return count;
+   }
+
+   uint32_t uploadDynamicSprites(const std::vector<SpriteInstance>& sprites) {
+      const uint32_t count = std::min(static_cast<uint32_t>(sprites.size()), dynamicSpriteCapacity);
+      if (count != 0) {
+         constexpr uint64_t base = static_cast<uint64_t>(staticSpriteCapacity) * sizeof(SpriteInstance);
+         queue.writeBuffer(spriteBuffer, base, sprites.data(), static_cast<size_t>(count) * sizeof(SpriteInstance));
+      }
+      return count;
    }
 
    void onChunkDataUpdated(const glm::ivec2 chunkPos) {
       const uint16_t bufferOffset = mapChunkPosToBufferIndex(chunkPos, Chunk::COUNT / 2);
-      updatedDataOffsets.push(bufferOffset);
+      updatedChunkIndices.push_back(bufferOffset);
    }
 
    void update(Camera& camera, glm::ivec2& globalChunkMove) {
@@ -39,13 +47,16 @@ public:
          camera.setOffset(camera.getOffset() - glm::vec2(chunkMove * Chunk::SIZE));
       }
 
-      while (!updatedDataOffsets.empty()) {
-         const uint32_t offset = updatedDataOffsets.top() * Chunk::SIZE_SQUARED;
-         updatedDataOffsets.pop();
+      std::sort(updatedChunkIndices.begin(), updatedChunkIndices.end());
+      const auto duplicatesBegin = std::unique(updatedChunkIndices.begin(), updatedChunkIndices.end());
+      updatedChunkIndices.erase(duplicatesBegin, updatedChunkIndices.end());
 
-         queue.writeBuffer(chunkDataBuffer, offset * sizeof(uint16_t), packedChunkMaps.data() + offset, Chunk::SIZE_SQUARED * sizeof(uint16_t));
+      for (const uint16_t chunkIndex : updatedChunkIndices) {
+         const uint32_t offset = static_cast<uint32_t>(chunkIndex) * Chunk::SIZE_SQUARED;
+         queue.writeBuffer(packedBuffer, offset * sizeof(uint16_t), packedChunkMaps.data() + offset, Chunk::SIZE_SQUARED * sizeof(uint16_t));
          queue.writeBuffer(tilemapBuffer, offset * sizeof(uint8_t), displayChunkMaps.data() + offset, Chunk::SIZE_SQUARED * sizeof(uint8_t));
       }
+      updatedChunkIndices.clear();
    }
 
    uint8_t* getDisplayDataPtrForChunk(const glm::ivec2 chunkPos) { return displayChunkMaps.data() + mapChunkPosToBufferIndex(chunkPos, Chunk::COUNT / 2) * Chunk::SIZE_SQUARED; }
@@ -69,10 +80,10 @@ private:
    }
 
    wgpu::Queue queue = nullptr;
-   wgpu::Buffer chunkDataBuffer = nullptr;
+   wgpu::Buffer packedBuffer = nullptr;
    wgpu::Buffer tilemapBuffer = nullptr;
-   wgpu::Buffer entityBuffer = nullptr;
+   wgpu::Buffer spriteBuffer = nullptr;
    std::vector<uint16_t> packedChunkMaps;
    std::vector<uint8_t> displayChunkMaps;
-   std::stack<uint16_t> updatedDataOffsets;
+   std::vector<uint16_t> updatedChunkIndices;
 };

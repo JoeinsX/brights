@@ -1,5 +1,6 @@
 #include "bindings.wgsl"
-#include "terrain/constants.wgsl"
+#include "common/worldConstants.wgsl"
+#include "lib/sphere.wgsl"
 
 const spriteSheetTileSize = 16.0;
 
@@ -16,13 +17,13 @@ struct Projected {
 
 fn projectTile(tileLocal: vec2f) -> Projected {
     let span = f32(mapSizeTiles) * u_config.sphereMapScale;
-    let q = (tileLocal - vec2f(u_config.macroOffset) - u_config.offset) / span * 2.0;
-    let p = 2.0 * q / (1.0 + dot(q, q));
+    let uv = (tileLocal - vec2f(u_config.macroOffset) - u_config.offset) / span;
+    let p = sphereXyFromStereographicUv(uv);
 
     var result: Projected;
     result.px = p * (u_config.scale * u_config.planetRadius) - u_config.centerOffset * u_config.resolution;
     result.p = p;
-    result.valid = dot(q, q) <= 1.0;
+    result.valid = dot(uv, uv) <= 0.25;
     return result;
 }
 
@@ -44,7 +45,7 @@ fn seatScreen(tile: vec2f, height: f32, simpleSmooth: f32) -> vec2f {
     for (var i = 0; i < 6; i++) {
         let probe = projectTile(seat);
         let rayDir = viewRayDir(probe.px, probe.p, simpleSmooth);
-        seat = tile + (2.0 - height) * rayDir.xy / rayDir.z;
+        seat = tile + (maxTerrainHeight - height) * rayDir.xy / rayDir.z;
     }
     return projectTile(seat).px;
 }
@@ -72,9 +73,11 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
     let tilePx = length(seatScreen(center + vec2f(0.5, 0.0), inst.pz, simpleSmooth) - seatScreen(center - vec2f(0.5, 0.0), inst.pz, simpleSmooth));
 
     let cornerLocal = vec2f((corner.x - 0.5) * inst.dimX, corner.y * inst.dimY) * tilePx;
+    let pivotLocal = vec2f(0.0, inst.pivotY * inst.dimY * tilePx);
+    let d = cornerLocal - pivotLocal;
     let cr = cos(inst.rotation);
     let sr = sin(inst.rotation);
-    let rolled = vec2f(cornerLocal.x * cr - cornerLocal.y * sr, cornerLocal.x * sr + cornerLocal.y * cr);
+    let rolled = vec2f(d.x * cr - d.y * sr, d.x * sr + d.y * cr) + pivotLocal;
     let px = base + vec2f(rolled.x, -rolled.y);
 
     let ndc = vec2f(2.0 * px.x / u_config.resolution.x - 1.0, 1.0 - 2.0 * px.y / u_config.resolution.y);

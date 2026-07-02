@@ -1,12 +1,12 @@
 #pragma once
 
-#include "applicationMeta.hpp"
-#include "game.hpp"
-#include "input/event.hpp"
-#include "input/input.hpp"
+#include "app/applicationMeta.hpp"
+#include "app/game.hpp"
+#include "app/input/event.hpp"
+#include "app/input/input.hpp"
+#include "app/settings/settings.hpp"
 #include "platform/window.hpp"
 #include "render/graphicsContext.hpp"
-#include "settings/settings.hpp"
 #include "ui/gui.hpp"
 #include "ui/settingsPanel.hpp"
 #include "ui/tileInspectorPanel.hpp"
@@ -69,8 +69,8 @@ public:
       frameCount++;
       auto currentTime = std::chrono::steady_clock::now();
 
-      const std::chrono::duration<float, std::milli> frameDuration = currentTime - lastFrameTime;
-      const float dtMs = frameDuration.count();
+      const std::chrono::duration<float> frameDuration = currentTime - lastFrameTime;
+      const float dtSeconds = frameDuration.count();
       lastFrameTime = currentTime;
 
       auto elapsedFpsMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTime).count();
@@ -82,7 +82,7 @@ public:
          lastFpsTime = currentTime;
       }
 
-      update(dtMs);
+      update(dtSeconds);
 
       renderFrame();
    }
@@ -90,7 +90,9 @@ public:
    [[nodiscard]] bool isRunning() const { return !getComponent<Window>().shouldClose(); }
 
 private:
-   void update(float dt) { game.update(dt, input, getComponent<Window>().framebufferSize(), getComponent<Settings>().accessSection<RenderSettings>(), editPanel.settings()); }
+   void update(float dtSeconds) {
+      game.update(dtSeconds, input, getComponent<Window>().framebufferSize(), getComponent<Settings>().accessSection<RenderSettings>(), editPanel.settings());
+   }
 
    void renderFrame() {
       if (!ctx.beginFrame(getComponent<Window>())) {
@@ -101,12 +103,12 @@ private:
       if (settingsPanel.draw(getComponent<Settings>().accessSection<RenderSettings>())) {
          getComponent<GameGraphics>().refreshDefines();
       }
-      editPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getEditStatus());
-      tileInspectorPanel.draw(game.getRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getTileInspection());
+      editPanel.draw(game.getTileRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getEditStatus());
+      tileInspectorPanel.draw(game.getTileRegistry(), reinterpret_cast<ImTextureID>(game.getAtlasView()), game.getTileInspection());
 
       const wgpu::RenderPassEncoder pass = ctx.beginRenderPass({0.0, 0.0, 0.0, 1.0});
-      getComponent<GameGraphics>().draw(pass, game.getPlanets());
-      getComponent<GameGraphics>().drawSprites(pass, game.getPlanets());
+      getComponent<GameGraphics>().draw(pass, game.getDrawData());
+      getComponent<GameGraphics>().drawSprites(pass, game.getDrawData());
       ui.render(pass);
       pass.end();
       pass.release();

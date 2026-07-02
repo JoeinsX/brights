@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/world/tile.hpp"
-#include "core/world/tileInspection.hpp"
+#include "core/world/contents/tile.hpp"
+#include "core/worldInteraction/tileInspection.hpp"
 
 #include <imgui.h>
 #include <optional>

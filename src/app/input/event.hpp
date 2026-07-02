@@ -10,6 +10,7 @@ enum class Key : uint8_t {
    S,
    D,
    Tab,
+   Space,
    F1,
    F2,
    F3,

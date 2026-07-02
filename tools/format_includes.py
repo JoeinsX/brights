@@ -3,7 +3,7 @@ import re
 import sys
 from pathlib import Path
 
-INCLUDE_RE = re.compile(r'(#[ \t]*include[ \t]*")((?:\.\./)+[^"]*)(")')
+INCLUDE_RE = re.compile(r'(#[ \t]*include[ \t]*")([^"]+)(")')
 
 
 def resolve_include(raw: str, file_dir: Path, src_root: Path) -> str | None:
@@ -19,7 +19,7 @@ def fix(path: Path, src_root: Path) -> bool:
 
     def repl(m: re.Match) -> str:
         rel = resolve_include(m.group(2), path.parent, src_root)
-        return m.group(1) + rel + m.group(3) if rel else m.group(0)
+        return m.group(1) + rel + m.group(3) if rel and rel != m.group(2) else m.group(0)
 
     new = INCLUDE_RE.sub(repl, text)
     if new == text:

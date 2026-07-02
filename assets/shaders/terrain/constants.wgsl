@@ -1,6 +1,4 @@
-const mapSizeTiles = 1024u;
-const chunkSize = 32u;
-const chunksPerSide = mapSizeTiles / chunkSize;
+#include "common/worldConstants.wgsl"
 
 const atlasGridSize = vec2f(16.0, 16.0);
 

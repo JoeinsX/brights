@@ -1,4 +1,4 @@
-#include "chunkMesher.hpp"
+#include "core/world/graphics/chunkMesher.hpp"
 
 void ChunkMesher::MeshContext::analyzeTopology() {
    constexpr int nOffsets[8][2] = {{-1, -1}, {0, -1}, {1, -1}, {-1, 0}, {1, 0}, {-1, 1}, {0, 1}, {1, 1}};

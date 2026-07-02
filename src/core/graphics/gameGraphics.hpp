@@ -3,31 +3,23 @@
 #include "app/settings/settings.hpp"
 #include "core/graphics/renderSettings.hpp"
 #include "core/world/chunk.hpp"
-#include "core/world/entity.hpp"
-#include "core/world/planet.hpp"
+#include "core/world/graphics/shaderBindings.hpp"
+#include "core/world/graphics/spriteInstance.hpp"
 #include "render/gpuHelpers.hpp"
 #include "render/graphicsContext.hpp"
 
+#include <cstdint>
 #include <set>
+#include <span>
 #include <string>
 #include <vector>
 
-namespace ShaderSlots {
-   constexpr uint32_t Uniforms = 0;
-   constexpr uint32_t TileMap = 1;
-   constexpr uint32_t TextureAtlas = 2;
-   constexpr uint32_t Sampler = 3;
-   constexpr uint32_t PackedMap = 4;
-   constexpr uint32_t Num = 5;
-}   // namespace ShaderSlots
-
-namespace SpriteSlots {
-   constexpr uint32_t Uniforms = 0;
-   constexpr uint32_t Instances = 1;
-   constexpr uint32_t TextureAtlas = 2;
-   constexpr uint32_t Sampler = 3;
-   constexpr uint32_t Num = 4;
-}   // namespace SpriteSlots
+struct PlanetDrawData {
+   wgpu::BindGroup terrainBindGroup;
+   wgpu::BindGroup spriteBindGroup;
+   uint32_t staticSpriteCount = 0;
+   uint32_t dynamicSpriteCount = 0;
+};
 
 class GameGraphics {
 public:
@@ -79,10 +71,10 @@ public:
       bglDesc.entries = layoutEntries.data();
       bindGroupLayout = device.createBindGroupLayout(bglDesc);
 
-      appliedDefines = renderSettings->getDefines();
-      compilePipeline(appliedDefines);
+      initializeSpriteLayout(device);
 
-      initializeSprites(device);
+      appliedDefines = renderSettings->getDefines();
+      compilePipelines();
    }
 
    void refreshDefines() {
@@ -91,32 +83,35 @@ public:
          return;
       }
       appliedDefines = std::move(defines);
-      compilePipeline(appliedDefines);
-      compileSpritePipeline(appliedDefines);
+      compilePipelines();
    }
 
-   void draw(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
+   void draw(wgpu::RenderPassEncoder pass, std::span<const PlanetDrawData> planets) {
       pass.setPipeline(pipeline);
 
-      for (const auto& planet : planets) {
-         pass.setBindGroup(0, planet->getBindGroup(), 0, nullptr);
+      for (const PlanetDrawData& planet : planets) {
+         pass.setBindGroup(0, planet.terrainBindGroup, 0, nullptr);
          pass.draw(6, 1, 0, 0);
       }
    }
 
-   void drawSprites(wgpu::RenderPassEncoder pass, const std::vector<std::unique_ptr<Planet>>& planets) {
+   void drawSprites(wgpu::RenderPassEncoder pass, std::span<const PlanetDrawData> planets) {
       if (!spritePipeline) {
          return;
       }
       pass.setPipeline(spritePipeline);
 
-      for (const auto& planet : planets) {
-         const uint32_t count = planet->getSpriteCount();
-         if (count == 0) {
+      for (const PlanetDrawData& planet : planets) {
+         if (planet.staticSpriteCount == 0 && planet.dynamicSpriteCount == 0) {
             continue;
          }
-         pass.setBindGroup(0, planet->getSpriteBindGroup(), 0, nullptr);
-         pass.draw(6, count, 0, 0);
+         pass.setBindGroup(0, planet.spriteBindGroup, 0, nullptr);
+         if (planet.staticSpriteCount > 0) {
+            pass.draw(6, planet.staticSpriteCount, 0, 0);
+         }
+         if (planet.dynamicSpriteCount > 0) {
+            pass.draw(6, planet.dynamicSpriteCount, 0, staticSpriteCapacity);
+         }
       }
    }
 
@@ -124,9 +119,12 @@ public:
    [[nodiscard]] wgpu::BindGroupLayout getSpriteBindGroupLayout() const { return spriteBindGroupLayout; }
 
 private:
-   void initializeSprites(wgpu::Device device) {
+   static constexpr const char* terrainShaderPath = "assets/shaders/terrain/terrain.wgsl";
+   static constexpr const char* spriteShaderPath = "assets/shaders/sprite/sprite.wgsl";
+
+   void initializeSpriteLayout(wgpu::Device device) {
       const uint64_t uniformSize = sizeof(UniformData);
-      const uint64_t instanceSize = static_cast<uint64_t>(spriteCapacity) * sizeof(Entity);
+      const uint64_t instanceSize = static_cast<uint64_t>(totalSpriteCapacity) * sizeof(SpriteInstance);
 
       std::vector<wgpu::BindGroupLayoutEntry> entries(SpriteSlots::Num);
       entries[SpriteSlots::Uniforms] = WGPUHelpers::
@@ -139,23 +137,24 @@ private:
       bglDesc.entryCount = static_cast<uint32_t>(entries.size());
       bglDesc.entries = entries.data();
       spriteBindGroupLayout = device.createBindGroupLayout(bglDesc);
-
-      compileSpritePipeline(appliedDefines);
    }
 
-   void compileSpritePipeline(const std::set<std::string>& defines) {
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(context->getDevice(), "assets/shaders/sprite/sprite.wgsl", defines);
-      if (spritePipeline) {
-         spritePipeline.release();
-         spritePipeline = nullptr;
+   void compilePipelines() {
+      compilePipeline(terrainShaderPath, bindGroupLayout, wgpu::CompareFunction::Less, true, pipeline);
+      compilePipeline(spriteShaderPath, spriteBindGroupLayout, wgpu::CompareFunction::LessEqual, false, spritePipeline);
+   }
+
+   void compilePipeline(const char* shaderPath, wgpu::BindGroupLayout layout, const wgpu::CompareFunction depthCompare, const bool depthWrite, wgpu::RenderPipeline& target) {
+      wgpu::Device device = context->getDevice();
+      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(device, shaderPath, appliedDefines);
+      if (target) {
+         target.release();
+         target = nullptr;
       }
-      buildSpritePipeline(context->getDevice(), context->getSurfaceFormat(), shaderModule);
-   }
 
-   void buildSpritePipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, wgpu::ShaderModule& shaderModule) {
       wgpu::PipelineLayoutDescriptor layoutDesc;
       layoutDesc.bindGroupLayoutCount = 1;
-      layoutDesc.bindGroupLayouts = reinterpret_cast<WGPUBindGroupLayout*>(&spriteBindGroupLayout);
+      layoutDesc.bindGroupLayouts = reinterpret_cast<WGPUBindGroupLayout*>(&layout);
       wgpu::PipelineLayout pipelineLayout = device.createPipelineLayout(layoutDesc);
 
       wgpu::RenderPipelineDescriptor pipelineDesc;
@@ -169,7 +168,7 @@ private:
       fragmentState.entryPoint = wgpu::StringView("fs_main");
 
       wgpu::ColorTargetState colorTarget;
-      colorTarget.format = surfaceFormat;
+      colorTarget.format = context->getSurfaceFormat();
       wgpu::BlendState blendState;
       blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
       blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
@@ -188,76 +187,14 @@ private:
       pipelineDesc.multisample.mask = ~0u;
 
       wgpu::DepthStencilState depthStencilState = wgpu::Default;
-
-      depthStencilState.depthCompare = wgpu::CompareFunction::LessEqual;
-      depthStencilState.depthWriteEnabled = wgpu::OptionalBool::False;
+      depthStencilState.depthCompare = depthCompare;
+      depthStencilState.depthWriteEnabled = depthWrite ? wgpu::OptionalBool::True : wgpu::OptionalBool::False;
       depthStencilState.format = GpuContext::depthTextureFormat;
-
       depthStencilState.stencilReadMask = 0;
       depthStencilState.stencilWriteMask = 0;
 
       pipelineDesc.depthStencil = &depthStencilState;
-      spritePipeline = device.createRenderPipeline(pipelineDesc);
-
-      shaderModule.release();
-      pipelineLayout.release();
-   }
-
-   void compilePipeline(const std::set<std::string>& defines) {
-      wgpu::ShaderModule shaderModule = GraphicsContext::createShaderModule(context->getDevice(), "assets/shaders/terrain/terrain.wgsl", defines);
-      if (pipeline) {
-         pipeline.release();
-         pipeline = nullptr;
-      }
-      buildRenderPipeline(context->getDevice(), context->getSurfaceFormat(), shaderModule);
-   }
-
-   void buildRenderPipeline(wgpu::Device device, wgpu::TextureFormat surfaceFormat, wgpu::ShaderModule& shaderModule) {
-      wgpu::PipelineLayoutDescriptor layoutDesc;
-      layoutDesc.bindGroupLayoutCount = 1;
-      layoutDesc.bindGroupLayouts = reinterpret_cast<WGPUBindGroupLayout*>(&bindGroupLayout);
-      wgpu::PipelineLayout pipelineLayout = device.createPipelineLayout(layoutDesc);
-
-      wgpu::RenderPipelineDescriptor pipelineDesc;
-      pipelineDesc.layout = pipelineLayout;
-      pipelineDesc.vertex.module = shaderModule;
-      pipelineDesc.vertex.entryPoint = wgpu::StringView("vs_main");
-      pipelineDesc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-
-      wgpu::FragmentState fragmentState;
-      fragmentState.module = shaderModule;
-      fragmentState.entryPoint = wgpu::StringView("fs_main");
-
-      wgpu::ColorTargetState colorTarget;
-      colorTarget.format = surfaceFormat;
-      wgpu::BlendState blendState;
-      blendState.color.srcFactor = wgpu::BlendFactor::SrcAlpha;
-      blendState.color.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
-      blendState.color.operation = wgpu::BlendOperation::Add;
-      blendState.alpha.srcFactor = wgpu::BlendFactor::One;
-      blendState.alpha.dstFactor = wgpu::BlendFactor::OneMinusSrcAlpha;
-      blendState.alpha.operation = wgpu::BlendOperation::Add;
-
-      colorTarget.blend = &blendState;
-      colorTarget.writeMask = wgpu::ColorWriteMask::All;
-
-      fragmentState.targetCount = 1;
-      fragmentState.targets = &colorTarget;
-      pipelineDesc.fragment = &fragmentState;
-      pipelineDesc.multisample.count = 1;
-      pipelineDesc.multisample.mask = ~0u;
-
-      wgpu::DepthStencilState depthStencilState = wgpu::Default;
-
-      depthStencilState.depthCompare = wgpu::CompareFunction::Less;
-      depthStencilState.depthWriteEnabled = wgpu::OptionalBool::True;
-      depthStencilState.format = GpuContext::depthTextureFormat;
-
-      depthStencilState.stencilReadMask = 0;
-      depthStencilState.stencilWriteMask = 0;
-
-      pipelineDesc.depthStencil = &depthStencilState;
-      pipeline = device.createRenderPipeline(pipelineDesc);
+      target = device.createRenderPipeline(pipelineDesc);
 
       shaderModule.release();
       pipelineLayout.release();

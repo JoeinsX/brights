@@ -1,9 +1,9 @@
 #pragma once
 
+#include "render/gpuContext.hpp"
 #include "util/wgslPreprocessor.hpp"
-#include "GLFW/glfw3.h"
-#include "gpuContext.hpp"
 
+#include <GLFW/glfw3.h>
 #include <filesystem>
 #include <set>
 #include <string>
@@ -79,8 +79,7 @@ public:
    [[nodiscard]] wgpu::Queue getQueue() const { return gpu->getQueue(); }
    [[nodiscard]] wgpu::TextureFormat getSurfaceFormat() const { return gpu->getSurfaceFormat(); }
 
-   static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath,
-                                                  const std::set<std::string>& defines = {}) {
+   static wgpu::ShaderModule createShaderModule(wgpu::Device device, const std::filesystem::path& shaderCodePath, const std::set<std::string>& defines = {}) {
       WGSLPreprocessor preprocessor;
       preprocessor.addIncludeRoot(shaderCodePath.parent_path().parent_path());
       for (const auto& def : defines) {

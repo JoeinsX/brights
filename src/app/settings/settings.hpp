@@ -1,8 +1,8 @@
 #pragma once
 
+#include "app/settings/yamlConversions.hpp"
 #include "util/hash.hpp"
 #include "util/logger.hpp"
-#include "yamlConversions.hpp"
 
 #include <concepts>
 #include <filesystem>

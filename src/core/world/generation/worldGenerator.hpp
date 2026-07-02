@@ -1,9 +1,9 @@
 #pragma once
 
-#include "FastNoise/FastNoise.h"
-#include "chunk.hpp"
-#include "entity.hpp"
+#include "core/world/chunk.hpp"
+#include "core/world/contents/entity.hpp"
 
+#include <FastNoise/FastNoise.h>
 #include <algorithm>
 #include <glm/glm.hpp>
 #include <vector>
@@ -72,7 +72,7 @@ private:
    }
 
 public:
-   WorldGenerator(const uint64_t seed, const EntityRegistry& entityRegistry): seed(seed), entityRegistry(entityRegistry) {}
+   explicit WorldGenerator(const uint64_t seed): seed(seed) {}
 
    static float computeTerrainHeight(const float elevation, const TileID terrain) {
       bool isWater = terrain == TileID::Water || terrain == TileID::ColdWater || terrain == TileID::Ice;
@@ -121,7 +121,6 @@ public:
       ctx.trees->GenUniformGrid2D(treeMap.data(), offset.x, offset.y, size, size, 1.0f, static_cast<int>(seed) + 555);
 
       constexpr float treeNoiseThreshold = 0.95f;
-      const EntityDefinition& treeDef = entityRegistry.get(EntityKind::Tree);
 
       for (int y = 0; y < size; ++y) {
          for (int x = 0; x < size; ++x) {
@@ -219,9 +218,7 @@ public:
             chunk.setTerrain(x, y, terrain, height);
 
             if (placeTree) {
-               chunk.addEntity({.position = glm::vec3(static_cast<float>(offset.x + x) + 0.5f, static_cast<float>(offset.y + y) + 0.5f, height),
-                                .spriteDimensions = treeDef.dimensions,
-                                .spriteId = encodeSpriteCell(treeDef.spriteCell)});
+               chunk.addEntity({.kind = EntityKind::Tree, .position = glm::vec3(static_cast<float>(offset.x + x) + 0.5f, static_cast<float>(offset.y + y) + 0.5f, height)});
             }
          }
       }
@@ -229,5 +226,4 @@ public:
 
 private:
    uint64_t seed{};
-   const EntityRegistry& entityRegistry;
 };

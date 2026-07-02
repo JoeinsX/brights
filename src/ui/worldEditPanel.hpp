@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/world/tile.hpp"
-#include "core/world/worldEdit.hpp"
+#include "core/world/contents/tile.hpp"
+#include "core/worldInteraction/worldEdit.hpp"
 
 #include <algorithm>
 #include <imgui.h>
@@ -46,8 +46,8 @@ public:
 
    void toggle() { visible = !visible; }
 
-   [[nodiscard]] BrushSettings settings() const {
-      BrushSettings active = brush;
+   [[nodiscard]] WorldEditBrush settings() const {
+      WorldEditBrush active = brush;
       active.active = visible;
       return active;
    }
@@ -131,5 +131,5 @@ private:
    }
 
    bool visible = false;
-   BrushSettings brush{};
+   WorldEditBrush brush{};
 };

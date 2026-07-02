@@ -37,6 +37,9 @@ enum class RenderFlag : uint8_t {
 
 ENABLE_BITMASK_OPERATORS(RenderFlag)
 
+// copies assets/shaders/common/worldConstants.wgsl
+inline constexpr float maxTerrainHeight = 2.0f;
+
 struct TileDefinition {
    glm::ivec2 atlasBase{};
    int variationCount = 1;

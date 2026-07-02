@@ -1,6 +1,6 @@
 #pragma once
 
-#include "event.hpp"
+#include "app/input/event.hpp"
 
 #include <array>
 #include <cstddef>

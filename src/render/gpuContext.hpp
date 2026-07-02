@@ -13,8 +13,8 @@ public:
    GpuContext() = default;
    GpuContext(const GpuContext&) = delete;
    GpuContext(GpuContext&&) = delete;
-   GpuContext& operator=(const GpuContext&) = delete;
-   GpuContext& operator=(GpuContext&&) = delete;
+   GpuContext& operator =(const GpuContext&) = delete;
+   GpuContext& operator =(GpuContext&&) = delete;
 
    ~GpuContext() {
       if (depthTextureView) {
@@ -58,12 +58,12 @@ public:
 
       wgpu::DeviceDescriptor deviceDesc = {};
       deviceDesc.deviceLostCallbackInfo.mode = wgpu::CallbackMode::AllowSpontaneous;
-      deviceDesc.deviceLostCallbackInfo.callback = [](WGPUDevice const*, const WGPUDeviceLostReason reason, const WGPUStringView message, void*, void*) {
+      deviceDesc.deviceLostCallbackInfo.callback = [](const WGPUDevice*, const WGPUDeviceLostReason reason, const WGPUStringView message, void*, void*) {
          if (reason != WGPUDeviceLostReason_Destroyed) {
             Logger::critical("[wgpu] device lost: {}", toStringView(message));
          }
       };
-      deviceDesc.uncapturedErrorCallbackInfo.callback = [](WGPUDevice const*, const WGPUErrorType type, const WGPUStringView message, void*, void*) {
+      deviceDesc.uncapturedErrorCallbackInfo.callback = [](const WGPUDevice*, const WGPUErrorType type, const WGPUStringView message, void*, void*) {
          Logger::error("[wgpu] {} error: {}", errorTypeName(static_cast<wgpu::ErrorType>(type)), toStringView(message));
       };
 
@@ -110,8 +110,7 @@ public:
       wgpu::SurfaceTexture surfaceTexture;
       surface.getCurrentTexture(&surfaceTexture);
 
-      if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal &&
-          surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal) {
+      if (surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessOptimal && surfaceTexture.status != wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal) {
          return nullptr;
       }
 

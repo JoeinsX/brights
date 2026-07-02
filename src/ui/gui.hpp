@@ -13,8 +13,8 @@ public:
    Gui() = default;
    Gui(const Gui&) = delete;
    Gui(Gui&&) = delete;
-   Gui& operator=(const Gui&) = delete;
-   Gui& operator=(Gui&&) = delete;
+   Gui& operator =(const Gui&) = delete;
+   Gui& operator =(Gui&&) = delete;
 
    ~Gui() {
       if (!ImGui::GetCurrentContext()) {

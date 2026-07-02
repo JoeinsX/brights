@@ -1,22 +1,6 @@
-struct Uniforms {
-    macroOffset: vec2i,
-    offset: vec2f,
-    centerOffset: vec2f,
-    resolution: vec2f,
-    scale: f32,
-    sphereMapScale: f32,
-    chunkOffset: vec2i,
-    resolutionScale: vec2f,
-    perspectiveStrength: f32,
-    perspectiveScale: f32,
-    planetRadius: f32,
-    planetDepth: f32,
-    simpleModeThreshold: f32,
-    raymarchMaxTiles: i32,
-    raymarchBinarySteps: i32,
-    _pad: f32,
-};
+#include "common/uniforms.wgsl"
 
+// must match SpriteInstance in src/core/world/graphics/spriteInstance.hpp
 struct SpriteInstance {
     px: f32,
     py: f32,
@@ -25,6 +9,7 @@ struct SpriteInstance {
     dimX: f32,
     dimY: f32,
     spriteId: u32,
+    pivotY: f32,
 };
 
 @group(0) @binding(0) var<uniform> u_config: Uniforms;
